@@ -1,6 +1,7 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+from veritabani import ai_yorumu_kaydet
 
 # .env dosyasındaki değişkenleri yükle
 load_dotenv()
@@ -8,7 +9,7 @@ load_dotenv()
 # OpenAI istemcisini oluştur (API Key otomatik olarak .env dosyasından çekilir)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def ai_sohbeti_baslat(puan=None, siralama=None, puan_turu=None, gercek_okullar=""):
+def ai_sohbeti_baslat(user_id=None, puan=None, siralama=None, puan_turu=None, gercek_okullar=""):
     print("\n" + "="*50)
     print("🤖 YKS YAPAY ZEKA KOCU AKTIF")
     print("Sohbeti bitirmek icin 'cikis' yazabilirsiniz.")
@@ -38,6 +39,11 @@ def ai_sohbeti_baslat(puan=None, siralama=None, puan_turu=None, gercek_okullar="
         ilk_cevap = response.choices[0].message.content
         mesajlar.append({"role": "assistant", "content": ilk_cevap})
         print(f"Koç: {ilk_cevap}\n")
+        
+        # İlk tavsiyeyi veritabanına kaydet
+        if user_id:
+            ai_yorumu_kaydet(user_id, ilk_cevap)
+            
     except Exception as e:
         print(f"Hata oluştu: {e}")
         return
