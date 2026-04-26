@@ -61,4 +61,10 @@ dependencies {
     // Retrofit & Gson
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // Material Icons Extended (Image, AutoAwesome vb. ikonlar için)
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Google Sign-In
+    implementation("com.google.android.gms:play-services-auth:21.0.0")
 }

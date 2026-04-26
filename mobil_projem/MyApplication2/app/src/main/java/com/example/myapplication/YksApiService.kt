@@ -11,4 +11,6 @@ interface YksApiService {
     fun calismaKaydet(@Body request: StudyLogRequest): Call<SimpleResponse>
     @POST("/ai-danis")
     fun yksAiDanis(@Body request: AiDanismanRequest): Call<AiResponse>
+    @POST("/soru-coz")
+    fun yksSoruCoz(@Body request: SoruCozRequest): Call<SoruCozResponse>
 }

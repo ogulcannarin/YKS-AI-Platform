@@ -5,13 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # Kendi modüllerin
+from soru_cozucu import soruyu_analiz_et
 from puan_hesaplama import tyt_puan_hesapla, ayt_say_puan_hesapla, ayt_ea_puan_hesapla, ayt_soz_puan_hesapla
 from siralama_motoru import ModelYoneticisi
 from veritabani import veriyi_buluta_kaydet, calisma_kaydet, ai_yorumu_kaydet
 from ai_danisman import client 
 
-app = FastAPI(title="YKS Master API")
+app = FastAPI(title="YKS Master API - Vision Edition")
 
+# Android emülatör ve dış erişim için CORS ayarı
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,9 +69,17 @@ class AiDanismanRequest(BaseModel):
     siralama: Optional[int] = 50000
     puan_turu: Optional[str] = "SAY"
 
+# YENİ: Soru Çözme Modeli
+class SoruCozRequest(BaseModel):
+    user_id: int = 123
+    image_base64: str
+    soru_metni: Optional[str] = "Bu soruyu adım adım açıklar mısın?"
+
 # --- SİSTEMİ BAŞLAT ---
 motor = ModelYoneticisi()
 motor.modelleri_egit()
+
+# --- ENDPOINTLER ---
 
 @app.post("/hesapla")
 async def puan_ve_siralama_hesapla(veri: HesaplaRequest):
@@ -122,6 +132,19 @@ async def ai_danisman_cevapla(veri: AiDanismanRequest):
         ai_cevap = response.choices[0].message.content
         ai_yorumu_kaydet(veri.user_id, ai_cevap)
         return {"basarili": True, "cevap": ai_cevap}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# YENİ: Soru Çözme Endpoint'i
+@app.post("/soru-coz")
+async def soru_coz_endpoint(veri: SoruCozRequest):
+    try:
+        cozum = soruyu_analiz_et(veri.image_base64, veri.soru_metni)
+        if cozum:
+            ai_yorumu_kaydet(veri.user_id, f"Görsel Soru Çözüldü")
+            return {"basarili": True, "cozum": cozum}
+        else:
+            raise HTTPException(status_code=500, detail="AI analiz başarısız.")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

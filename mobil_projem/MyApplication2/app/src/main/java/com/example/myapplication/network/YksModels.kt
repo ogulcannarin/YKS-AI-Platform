@@ -73,6 +73,16 @@ data class AiDanismanRequest(
     @SerializedName("siralama") val siralama: Int? = 50000,
     @SerializedName("puan_turu") val puan_turu: String? = "SAY"
 )
+data class SoruCozRequest(
+    @SerializedName("user_id") val user_id: Int = 123,
+    @SerializedName("image_base64") val image_base64: String,
+    @SerializedName("soru_metni") val soru_metni: String = "Bu soruyu adım adım açıklar mısın?"
+)
+
+data class SoruCozResponse(
+    @SerializedName("basarili") val basarili: Boolean,
+    @SerializedName("cozum") val cozum: String
+)
 
 data class AiResponse(
     @SerializedName("basarili") val basarili: Boolean,
