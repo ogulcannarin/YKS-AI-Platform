@@ -46,8 +46,10 @@ class AuthActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(background = YksRenkler.Arka)) {
-                AuthScreen { 
-                    startActivity(Intent(this, MainActivity::class.java))
+                AuthScreen { email -> 
+                    val intent = Intent(this, MainActivity::class.java)
+                    intent.putExtra("USER_EMAIL", email)
+                    startActivity(intent)
                     finish()
                 }
             }
@@ -56,7 +58,7 @@ class AuthActivity : ComponentActivity() {
 }
 
 @Composable
-fun AuthScreen(onLoginSuccess: () -> Unit) {
+fun AuthScreen(onLoginSuccess: (String) -> Unit) {
     val context = LocalContext.current
     var isLoginMode by remember { mutableStateOf(true) }
     
@@ -102,7 +104,8 @@ fun AuthScreen(onLoginSuccess: () -> Unit) {
                             isLoading = false
                             if (response.isSuccessful && response.body()?.access_token != null) {
                                 Toast.makeText(context, "Google ile Giriş Başarılı!", Toast.LENGTH_SHORT).show()
-                                onLoginSuccess()
+                                val googleEmail = account?.email ?: ""
+                                onLoginSuccess(googleEmail)
                             } else {
                                 Toast.makeText(context, "Supabase Google yetkilendirmesi başarısız", Toast.LENGTH_SHORT).show()
                             }
@@ -136,7 +139,7 @@ fun AuthScreen(onLoginSuccess: () -> Unit) {
                     isLoading = false
                     if (response.isSuccessful && response.body()?.access_token != null) {
                         Toast.makeText(context, "Giriş Başarılı!", Toast.LENGTH_SHORT).show()
-                        onLoginSuccess()
+                        onLoginSuccess(email)
                     } else {
                         Toast.makeText(context, "Hata: Bilgileri kontrol edin (${response.code()})", Toast.LENGTH_LONG).show()
                     }

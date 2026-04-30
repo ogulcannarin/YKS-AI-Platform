@@ -35,6 +35,12 @@ interface SupabaseApiService {
         @Header("apikey") apiKey: String,
         @Body request: IdTokenRequest
     ): Call<AuthResponse>
+
+    @retrofit2.http.GET("rest/v1/kullanicilar")
+    fun getKullanici(
+        @Header("apikey") apiKey: String,
+        @retrofit2.http.Query("email") emailEq: String
+    ): Call<List<KullaniciKayitRequest>>
 }
 
 data class IdTokenRequest(

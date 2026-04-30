@@ -67,4 +67,7 @@ dependencies {
 
     // Google Sign-In
     implementation("com.google.android.gms:play-services-auth:21.0.0")
+
+    // Coil for Image Loading
+    implementation("io.coil-kt:coil-compose:2.5.0")
 }

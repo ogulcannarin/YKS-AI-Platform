@@ -7,25 +7,27 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
@@ -53,48 +55,52 @@ object YksRenkler {
     val TabAktif2   = Color(0xFF8B83FF)
 }
 
-// ─── Gradyanlar ───────────────────────────────────────────────────────────────
-val VurguGradyan = Brush.linearGradient(
-    colors = listOf(YksRenkler.Vurgu, YksRenkler.TabAktif2)
-)
-val YesilGradyan = Brush.linearGradient(
-    colors = listOf(Color(0xFF00C87A), YksRenkler.Yesil)
-)
-val BaslikGradyan = Brush.linearGradient(
-    colors = listOf(YksRenkler.Vurgu, Color(0xFFA78BFA), YksRenkler.Yesil)
-)
+val VurguGradyan = Brush.linearGradient(colors = listOf(YksRenkler.Vurgu, YksRenkler.TabAktif2))
+val YesilGradyan = Brush.linearGradient(colors = listOf(Color(0xFF00C87A), YksRenkler.Yesil))
+val BaslikGradyan = Brush.linearGradient(colors = listOf(YksRenkler.Vurgu, Color(0xFFA78BFA), YksRenkler.Yesil))
 
-// ─── Modeller ─────────────────────────────────────────────────────────────────
 data class YksSekmesi(val id: String, val emoji: String, val etiket: String)
-
-val SEKMELER = listOf(
-    YksSekmesi("TYT",   "📝", "TYT"),
-    YksSekmesi("SAY",   "🔢", "Sayısal"),
-    YksSekmesi("EA",    "📐", "EA"),
-    YksSekmesi("SOZ",   "📚", "Sözel"),
-    YksSekmesi("CALIS", "⏱", "Çalışma"),
-    YksSekmesi("AI",    "🤖", "AI Koç"),
-    YksSekmesi("SORU",  "📸", "Soru Çöz")
-)
-
 val DERSLER = listOf("Matematik", "Türkçe", "Fizik", "Kimya", "Biyoloji", "Edebiyat")
+
+enum class AltSekme(val baslik: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    HESAPLA("Hesapla", Icons.Rounded.Calculate),
+    AI("AI Asistan", Icons.Rounded.AutoAwesome),
+    KRONOMETRE("Çalışma", Icons.Rounded.Timer),
+    PROFIL("Profil", Icons.Rounded.Person)
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val userEmail = intent.getStringExtra("USER_EMAIL") ?: ""
             MaterialTheme(colorScheme = darkColorScheme(background = YksRenkler.Arka)) {
-                YksAsistanUI()
+                YksAsistanUI(userEmail)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        recreate()
     }
 }
 
 @Composable
-fun YksAsistanUI() {
+fun YksAsistanUI(userEmail: String = "") {
     val context = LocalContext.current
-    var aktifSekme by remember { mutableStateOf("TYT") }
+    var altSekme by remember { mutableStateOf(AltSekme.HESAPLA) }
+    var hesaplaSekme by remember { mutableStateOf("TYT") }
+    var aiSekme by remember { mutableStateOf("SOHBET") }
+
+    LaunchedEffect(Unit) {
+        val targetTab = (context as? ComponentActivity)?.intent?.getStringExtra("TARGET_TAB")
+        if (targetTab != null) {
+            try { altSekme = AltSekme.valueOf(targetTab) } catch (e: Exception) {}
+        }
+    }
 
     val retrofit = remember {
         Retrofit.Builder()
@@ -132,115 +138,179 @@ fun YksAsistanUI() {
     var aiCevap by remember { mutableStateOf("") }
     var aiYukleniyor by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize().background(YksRenkler.Arka)) {
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().navigationBarsPadding()) {
+    Scaffold(
+        bottomBar = {
+            ModernBottomNav(
+                secili = altSekme,
+                onSec = { sekme ->
+                    if (sekme == AltSekme.PROFIL) {
+                        val intent = Intent(context, ProfilActivity::class.java)
+                        intent.putExtra("USER_EMAIL", userEmail)
+                        context.startActivity(intent)
+                    } else {
+                        altSekme = sekme
+                    }
+                }
+            )
+        },
+        containerColor = YksRenkler.Arka
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+        ) {
             BaslikBolumu()
-            SekmeCubugu(aktifSekme = aktifSekme, onSekme = { aktifSekme = it; sonuc = null })
 
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-
-                // 1. HESAPLAMA SEKMELERİ
-                if (aktifSekme in listOf("TYT", "SAY", "EA", "SOZ")) {
-                    ObpKarti(obp) { obp = it }
-                    NetKarti(aktifSekme) {
-                        when (aktifSekme) {
-                            "TYT" -> {
-                                NetSatiri("Türkçe", tTur, {tTur=it}, "Matematik", tMat, {tMat=it})
-                                NetSatiri("Sosyal", tSos, {tSos=it}, "Fen", tFen, {tFen=it})
-                            }
-                            "SAY" -> {
-                                NetSatiri("AYT Mat", aMat, {aMat=it}, "Fizik", aFiz, {aFiz=it})
-                                NetSatiri("Kimya", aKim, {aKim=it}, "Biyoloji", aBio, {aBio=it})
-                            }
-                            "EA" -> {
-                                NetSatiri("AYT Mat", aMat, {aMat=it}, "Edebiyat", aEdb, {aEdb=it})
-                                NetSatiri("Tarih-1", aTar1, {aTar1=it}, "Coğrafya-1", aCog1, {aCog1=it})
-                            }
-                            "SOZ" -> {
-                                NetSatiri("Edebiyat", aEdb, {aEdb=it}, "Tarih-2", aTar2, {aTar2=it})
-                                NetSatiri("Coğrafya-2", aCog2, {aCog2=it}, "Fel/Din", aFel, {aFel=it})
-                            }
-                        }
-                    }
-                    GradyanButon("⚡ Hesapla", VurguGradyan, yukleniyor = yukleniyor) {
-                        yukleniyor = true
-                        val req = HesaplaRequest(
-                            obp.toDoubleOrNull() ?: 0.0,
-                            TytNetleri(tTur.toDoubleOrNull() ?: 0.0, tMat.toDoubleOrNull() ?: 0.0, tSos.toDoubleOrNull() ?: 0.0, tFen.toDoubleOrNull() ?: 0.0),
-                            AytSayisalNetleri(aMat.toDoubleOrNull() ?: 0.0, aFiz.toDoubleOrNull() ?: 0.0, aKim.toDoubleOrNull() ?: 0.0, aBio.toDoubleOrNull() ?: 0.0),
-                            AytEaNetleri(aMat.toDoubleOrNull() ?: 0.0, aEdb.toDoubleOrNull() ?: 0.0, aTar1.toDoubleOrNull() ?: 0.0, aCog1.toDoubleOrNull() ?: 0.0),
-                            AytSozelNetleri(aEdb.toDoubleOrNull() ?: 0.0, aTar1.toDoubleOrNull() ?: 0.0, aCog1.toDoubleOrNull() ?: 0.0, aTar2.toDoubleOrNull() ?: 0.0, aCog2.toDoubleOrNull() ?: 0.0, aFel.toDoubleOrNull() ?: 0.0, aDin.toDoubleOrNull() ?: 0.0)
+                when (altSekme) {
+                    AltSekme.HESAPLA -> {
+                        SekmeCubugu(
+                            sekmeler = listOf(
+                                YksSekmesi("TYT", "📝", "TYT"),
+                                YksSekmesi("SAY", "🔢", "Sayısal"),
+                                YksSekmesi("EA", "📐", "EA"),
+                                YksSekmesi("SOZ", "📚", "Sözel")
+                            ),
+                            aktifSekme = hesaplaSekme,
+                            onSekme = { hesaplaSekme = it; sonuc = null }
                         )
-                        apiService.puanHesapla(req).enqueue(object : Callback<HesaplaResponse> {
-                            override fun onResponse(call: Call<HesaplaResponse>, response: Response<HesaplaResponse>) {
-                                yukleniyor = false
-                                if (response.isSuccessful) {
-                                    sonuc = "Tahmini Sıralama: ${response.body()?.sonuclar?.get(aktifSekme)?.siralama ?: "N/A"}"
+                        Spacer(Modifier.height(16.dp))
+                        ObpKarti(obp) { obp = it }
+                        NetKarti(hesaplaSekme) {
+                            when (hesaplaSekme) {
+                                "TYT" -> {
+                                    NetSatiri("Türkçe", tTur, {tTur=it}, "Matematik", tMat, {tMat=it})
+                                    NetSatiri("Sosyal", tSos, {tSos=it}, "Fen", tFen, {tFen=it})
+                                }
+                                "SAY" -> {
+                                    NetSatiri("AYT Mat", aMat, {aMat=it}, "Fizik", aFiz, {aFiz=it})
+                                    NetSatiri("Kimya", aKim, {aKim=it}, "Biyoloji", aBio, {aBio=it})
+                                }
+                                "EA" -> {
+                                    NetSatiri("AYT Mat", aMat, {aMat=it}, "Edebiyat", aEdb, {aEdb=it})
+                                    NetSatiri("Tarih-1", aTar1, {aTar1=it}, "Coğrafya-1", aCog1, {aCog1=it})
+                                }
+                                "SOZ" -> {
+                                    NetSatiri("Edebiyat", aEdb, {aEdb=it}, "Tarih-2", aTar2, {aTar2=it})
+                                    NetSatiri("Coğrafya-2", aCog2, {aCog2=it}, "Fel/Din", aFel, {aFel=it})
                                 }
                             }
-                            override fun onFailure(call: Call<HesaplaResponse>, t: Throwable) { yukleniyor = false }
-                        })
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        GradyanButon("⚡ Hesapla", VurguGradyan, yukleniyor = yukleniyor) {
+                            yukleniyor = true
+                            val req = HesaplaRequest(
+                                obp.toDoubleOrNull() ?: 0.0,
+                                TytNetleri(tTur.toDoubleOrNull() ?: 0.0, tMat.toDoubleOrNull() ?: 0.0, tSos.toDoubleOrNull() ?: 0.0, tFen.toDoubleOrNull() ?: 0.0),
+                                AytSayisalNetleri(aMat.toDoubleOrNull() ?: 0.0, aFiz.toDoubleOrNull() ?: 0.0, aKim.toDoubleOrNull() ?: 0.0, aBio.toDoubleOrNull() ?: 0.0),
+                                AytEaNetleri(aMat.toDoubleOrNull() ?: 0.0, aEdb.toDoubleOrNull() ?: 0.0, aTar1.toDoubleOrNull() ?: 0.0, aCog1.toDoubleOrNull() ?: 0.0),
+                                AytSozelNetleri(aEdb.toDoubleOrNull() ?: 0.0, aTar1.toDoubleOrNull() ?: 0.0, aCog1.toDoubleOrNull() ?: 0.0, aTar2.toDoubleOrNull() ?: 0.0, aCog2.toDoubleOrNull() ?: 0.0, aFel.toDoubleOrNull() ?: 0.0, aDin.toDoubleOrNull() ?: 0.0)
+                            )
+                            apiService.puanHesapla(req).enqueue(object : Callback<HesaplaResponse> {
+                                override fun onResponse(call: Call<HesaplaResponse>, response: Response<HesaplaResponse>) {
+                                    yukleniyor = false
+                                    if (response.isSuccessful) sonuc = "Tahmini Sıralama: ${response.body()?.sonuclar?.get(hesaplaSekme)?.siralama ?: "N/A"}"
+                                }
+                                override fun onFailure(call: Call<HesaplaResponse>, t: Throwable) { yukleniyor = false }
+                            })
+                        }
+                        sonuc?.let { SonucKarti(it) }
                     }
-                    sonuc?.let { SonucKarti(it) }
-                }
 
-                // 2. ÇALIŞMA SEKME
-                if (aktifSekme == "CALIS") {
-                    KronometreKarti("%02d:%02d:%02d".format(saniye/3600, (saniye%3600)/60, saniye%60), calisiyorMu, seciliDers)
-                    DersSecimKarti(DERSLER, seciliDers) { seciliDers = it }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { calisiyorMu = !calisiyorMu }, modifier = Modifier.weight(1f)) { Text(if(calisiyorMu) "Durdur" else "Başlat") }
-                        OutlinedButton(onClick = { saniye = 0; calisiyorMu = false }, modifier = Modifier.weight(1f)) { Text("Sıfırla") }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    GradyanButon("✓ Çalışmayı Kaydet", YesilGradyan) {
-                        apiService.calismaKaydet(StudyLogRequest(seciliDers, saniye/60)).enqueue(object : Callback<SimpleResponse> {
-                            override fun onResponse(call: Call<SimpleResponse>, response: Response<SimpleResponse>) {
-                                Toast.makeText(context, "Kaydedildi!", Toast.LENGTH_SHORT).show()
-                                saniye = 0
+                    AltSekme.AI -> {
+                        SekmeCubugu(
+                            sekmeler = listOf(
+                                YksSekmesi("SOHBET", "💬", "AI Sohbet"),
+                                YksSekmesi("SORU_COZ", "📸", "Soru Çöz")
+                            ),
+                            aktifSekme = aiSekme,
+                            onSekme = { aiSekme = it }
+                        )
+                        Spacer(Modifier.height(16.dp))
+
+                        if (aiSekme == "SOHBET") {
+                            AiKocBubble(aiCevap, aiYukleniyor)
+                            OutlinedTextField(
+                                value = aiSoru,
+                                onValueChange = { aiSoru = it },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                placeholder = { Text("AI Koç'a bir soru sor...", color = YksRenkler.YaziMuted) },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = YksRenkler.Vurgu,
+                                    unfocusedBorderColor = YksRenkler.Kenar,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+                            GradyanButon("🚀 Soruyu Gönder", VurguGradyan, yukleniyor = aiYukleniyor) {
+                                aiYukleniyor = true
+                                apiService.yksAiDanis(AiDanismanRequest(soru = aiSoru)).enqueue(object : Callback<AiResponse> {
+                                    override fun onResponse(call: Call<AiResponse>, response: Response<AiResponse>) {
+                                        aiYukleniyor = false
+                                        aiCevap = response.body()?.cevap ?: "Yanıt alınamadı."
+                                    }
+                                    override fun onFailure(call: Call<AiResponse>, t: Throwable) { aiYukleniyor = false }
+                                })
                             }
-                            override fun onFailure(call: Call<SimpleResponse>, t: Throwable) {}
-                        })
-                    }
-                }
-
-                // 3. AI KOÇ SEKME
-                if (aktifSekme == "AI") {
-                    AiKocBubble(aiCevap, aiYukleniyor)
-                    OutlinedTextField(
-                        value = aiSoru,
-                        onValueChange = { aiSoru = it },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-                        placeholder = { Text("AI Koç'a bir soru sor...") },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    GradyanButon("🚀 Soruyu Gönder", VurguGradyan, yukleniyor = aiYukleniyor) {
-                        aiYukleniyor = true
-                        apiService.yksAiDanis(AiDanismanRequest(soru = aiSoru)).enqueue(object : Callback<AiResponse> {
-                            override fun onResponse(call: Call<AiResponse>, response: Response<AiResponse>) {
-                                aiYukleniyor = false
-                                aiCevap = response.body()?.cevap ?: "Yanıt alınamadı."
-                            }
-                            override fun onFailure(call: Call<AiResponse>, t: Throwable) { aiYukleniyor = false }
-                        })
-                    }
-                }
-
-                // 4. SORU ÇÖZ SEKME
-                if (aktifSekme == "SORU") {
-                    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(YksRenkler.Yuzey).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(24.dp)).padding(24.dp)) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("📸", fontSize = 48.sp)
-                            Text("AI Soru Çözücü", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                            Text("Sorunun fotoğrafını çek ve AI anında çözsün.", color = Color.Gray, textAlign = TextAlign.Center)
-                            Spacer(Modifier.height(16.dp))
-                            GradyanButon("Sayfayı Aç", VurguGradyan) {
-                                context.startActivity(Intent(context, SoruCozActivity::class.java))
+                        } else {
+                            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(YksRenkler.Yuzey).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(24.dp)).padding(32.dp)) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                    Text("📸", fontSize = 64.sp)
+                                    Spacer(Modifier.height(16.dp))
+                                    Text("AI Soru Çözücü", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Yapamadığın sorunun fotoğrafını çek, yapay zeka adım adım senin için çözsün.", color = YksRenkler.YaziSecond, textAlign = TextAlign.Center)
+                                    Spacer(Modifier.height(24.dp))
+                                    GradyanButon("Kamerayı Aç", VurguGradyan) {
+                                        context.startActivity(Intent(context, SoruCozActivity::class.java))
+                                    }
+                                }
                             }
                         }
                     }
+
+                    AltSekme.KRONOMETRE -> {
+                        Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(YksRenkler.Yuzey).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(24.dp)).padding(24.dp)) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                KronometreKarti("%02d:%02d:%02d".format(saniye/3600, (saniye%3600)/60, saniye%60), calisiyorMu, seciliDers)
+                                DersSecimKarti(DERSLER, seciliDers) { seciliDers = it }
+                                Spacer(Modifier.height(16.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Button(
+                                        onClick = { calisiyorMu = !calisiyorMu }, 
+                                        modifier = Modifier.fillMaxWidth(0.48f).height(50.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if(calisiyorMu) YksRenkler.Kirmizi else YksRenkler.Vurgu)
+                                    ) { Text(if(calisiyorMu) "Durdur" else "Başlat", fontWeight = FontWeight.Bold) }
+                                    
+                                    OutlinedButton(
+                                        onClick = { saniye = 0; calisiyorMu = false }, 
+                                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                        border = BorderStroke(1.dp, YksRenkler.Kenar)
+                                    ) { Text("Sıfırla") }
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                GradyanButon("✓ Çalışmayı Kaydet", YesilGradyan) {
+                                    apiService.calismaKaydet(StudyLogRequest(seciliDers, saniye/60)).enqueue(object : Callback<SimpleResponse> {
+                                        override fun onResponse(call: Call<SimpleResponse>, response: Response<SimpleResponse>) {
+                                            Toast.makeText(context, "Kaydedildi!", Toast.LENGTH_SHORT).show()
+                                            saniye = 0
+                                        }
+                                        override fun onFailure(call: Call<SimpleResponse>, t: Throwable) {}
+                                    })
+                                }
+                            }
+                        }
+                    }
+                    else -> {}
                 }
             }
+            Spacer(Modifier.height(100.dp)) // Nav bar padding
         }
     }
 }
@@ -248,48 +318,82 @@ fun YksAsistanUI() {
 // ─── UI BİLEŞENLERİ ──────────────────────────────────────────────────────────
 
 @Composable
-fun BaslikBolumu() {
-    Column(modifier = Modifier.padding(start = 20.dp, top = 40.dp, end = 20.dp, bottom = 10.dp)) {
-        Row {
-            Text(
-                text = "YKS ",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+fun ModernBottomNav(secili: AltSekme, onSec: (AltSekme) -> Unit) {
+    NavigationBar(
+        containerColor = YksRenkler.Arka, // Arka plana uyumlu
+        contentColor = YksRenkler.YaziMuted,
+        tonalElevation = 0.dp,
+        modifier = Modifier.drawBehind {
+            drawLine(
+                color = YksRenkler.Kenar,
+                start = Offset(0f, 0f),
+                end = Offset(size.width, 0f),
+                strokeWidth = 1.dp.toPx()
             )
-            Text(
-                text = "Asistan", // Burada 'text =' ekledik
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                style = TextStyle(brush = BaslikGradyan) // Brush'ı style içine aldık, en güvenli yol budur
+        }
+    ) {
+        AltSekme.values().forEach { sekme ->
+            val isSelected = secili == sekme
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = { onSec(sekme) },
+                icon = {
+                    Icon(
+                        imageVector = sekme.icon, 
+                        contentDescription = sekme.baslik,
+                        modifier = Modifier.size(26.dp)
+                    )
+                },
+                label = { Text(sekme.baslik, fontWeight = FontWeight.SemiBold, fontSize = 10.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = YksRenkler.Vurgu,
+                    selectedTextColor = YksRenkler.Vurgu,
+                    indicatorColor = YksRenkler.VurguSoft,
+                    unselectedIconColor = YksRenkler.YaziMuted,
+                    unselectedTextColor = YksRenkler.YaziMuted
+                )
             )
         }
     }
 }
 
 @Composable
-fun SekmeCubugu(aktifSekme: String, onSekme: (String) -> Unit) {
-    Box(modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(16.dp)).background(YksRenkler.Yuzey).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(16.dp)).padding(4.dp)) {
-        LazyRow {
-            itemsIndexed(SEKMELER) { _, s ->
+fun BaslikBolumu() {
+    Column(modifier = Modifier.padding(start = 24.dp, top = 40.dp, end = 24.dp, bottom = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(VurguGradyan),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.School, contentDescription = "Logo", tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(text = "YKS Asistan", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                Text(text = "Yapay Zeka Destekli Koçun", fontSize = 13.sp, color = YksRenkler.YaziSecond)
+            }
+        }
+    }
+}
+
+@Composable
+fun SekmeCubugu(sekmeler: List<YksSekmesi>, aktifSekme: String, onSekme: (String) -> Unit) {
+    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(YksRenkler.Yuzey).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(16.dp)).padding(4.dp)) {
+        LazyRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            itemsIndexed(sekmeler) { _, s ->
                 val aktif = s.id == aktifSekme
                 Box(
                     modifier = Modifier
-                        .padding(end = 8.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        // HATA BURADAYDI: Parametreleri isimlendirerek çakışmayı önledik
-                        .then(
-                            if (aktif) Modifier.background(brush = VurguGradyan)
-                            else Modifier.background(color = Color.Transparent)
-                        )
+                        .then(if (aktif) Modifier.background(brush = VurguGradyan) else Modifier.background(color = Color.Transparent))
                         .clickable { onSekme(s.id) }
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "${s.emoji} ${s.etiket}",
-                        color = if (aktif) Color.White else YksRenkler.YaziMuted,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "${s.emoji} ${s.etiket}", color = if (aktif) Color.White else YksRenkler.YaziMuted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
         }
@@ -298,62 +402,102 @@ fun SekmeCubugu(aktifSekme: String, onSekme: (String) -> Unit) {
 
 @Composable
 fun ObpKarti(obp: String, onObp: (String) -> Unit) {
-    Column(modifier = Modifier.padding(bottom = 12.dp)) {
-        Text("OBP PUANI", color = YksRenkler.YaziSecond, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    Column(modifier = Modifier.padding(bottom = 16.dp)) {
+        Text("OBP PUANI", color = YksRenkler.YaziSecond, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
         OutlinedTextField(
             value = obp, onValueChange = onObp, modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+            shape = RoundedCornerShape(16.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = YksRenkler.Vurgu,
+                unfocusedBorderColor = YksRenkler.Kenar,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            )
         )
     }
 }
 
 @Composable
 fun NetKarti(baslik: String, icerik: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).background(YksRenkler.Yuzey, RoundedCornerShape(16.dp)).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(16.dp)).padding(16.dp)) {
-        Text(baslik, color = YksRenkler.Vurgu, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
+    Column(modifier = Modifier.fillMaxWidth().background(YksRenkler.Yuzey, RoundedCornerShape(20.dp)).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(20.dp)).padding(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.EditNote, contentDescription = null, tint = YksRenkler.Vurgu, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("$baslik NETLERİ", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+        Spacer(Modifier.height(12.dp))
         icerik()
     }
 }
 
 @Composable
 fun NetSatiri(l1: String, v1: String, on1: (String)->Unit, l2: String, v2: String, on2: (String)->Unit) {
-    Row(modifier = Modifier.padding(top = 8.dp)) {
-        OutlinedTextField(v1, on1, label = {Text(l1, fontSize = 10.sp)}, modifier = Modifier.weight(1f), singleLine = true)
-        Spacer(Modifier.width(8.dp))
-        OutlinedTextField(v2, on2, label = {Text(l2, fontSize = 10.sp)}, modifier = Modifier.weight(1f), singleLine = true)
+    Row(modifier = Modifier.padding(top = 12.dp)) {
+        OutlinedTextField(
+            value = v1, onValueChange = on1, label = {Text(l1, fontSize = 11.sp, color = YksRenkler.YaziMuted)}, 
+            modifier = Modifier.fillMaxWidth(0.48f), singleLine = true, shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YksRenkler.Vurgu, unfocusedBorderColor = YksRenkler.Kenar, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+        )
+        Spacer(Modifier.width(12.dp))
+        OutlinedTextField(
+            value = v2, onValueChange = on2, label = {Text(l2, fontSize = 11.sp, color = YksRenkler.YaziMuted)}, 
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = YksRenkler.Vurgu, unfocusedBorderColor = YksRenkler.Kenar, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+        )
     }
 }
 
 @Composable
 fun GradyanButon(metin: String, gradyan: Brush, yukleniyor: Boolean = false, onClick: () -> Unit) {
-    Box(modifier = Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(12.dp)).background(gradyan).clickable { onClick() }, contentAlignment = Alignment.Center) {
-        if(yukleniyor) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-        else Text(metin, color = Color.White, fontWeight = FontWeight.Bold)
+    Box(modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(16.dp)).background(gradyan).clickable { onClick() }, contentAlignment = Alignment.Center) {
+        if(yukleniyor) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(26.dp), strokeWidth = 3.dp)
+        else Text(metin, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
     }
 }
 
 @Composable
 fun SonucKarti(metin: String) {
-    Card(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), colors = CardDefaults.cardColors(containerColor = YksRenkler.VurguSoft)) {
-        Text(metin, modifier = Modifier.padding(16.dp), color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp), 
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = YksRenkler.VurguSoft),
+        border = BorderStroke(1.dp, YksRenkler.Vurgu.copy(alpha=0.5f))
+    ) {
+        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.EmojiEvents, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(32.dp))
+            Spacer(Modifier.width(16.dp))
+            Text(metin, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
     }
 }
 
 @Composable
 fun KronometreKarti(sure: String, calisiyorMu: Boolean, ders: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp)) {
-        Text(text = sure, fontSize = 54.sp, fontWeight = FontWeight.Bold, color = if (calisiyorMu) YksRenkler.Yesil else Color.White)
-        Text("Ders: $ders", color = YksRenkler.YaziSecond, fontSize = 14.sp)
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Box(
+            modifier = Modifier.size(160.dp).clip(CircleShape).border(4.dp, if (calisiyorMu) YksRenkler.Yesil else YksRenkler.Kenar, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = sure, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Aktif Ders: $ders", color = YksRenkler.YaziSecond, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 fun DersSecimKarti(dersler: List<String>, secili: String, onSec: (String) -> Unit) {
-    LazyRow(modifier = Modifier.padding(vertical = 12.dp)) {
+    LazyRow(modifier = Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(dersler) { _, d ->
-            Box(modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(10.dp)).background(if(d == secili) YksRenkler.VurguSoft else YksRenkler.YuzeyAlt).clickable { onSec(d) }.padding(12.dp, 8.dp)) {
-                Text(d, color = Color.White, fontSize = 12.sp)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if(d == secili) YksRenkler.Vurgu else YksRenkler.Arka)
+                    .border(1.dp, if(d == secili) Color.Transparent else YksRenkler.Kenar, RoundedCornerShape(12.dp))
+                    .clickable { onSec(d) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(d, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -361,7 +505,27 @@ fun DersSecimKarti(dersler: List<String>, secili: String, onSec: (String) -> Uni
 
 @Composable
 fun AiKocBubble(cevap: String, yukleniyor: Boolean) {
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = YksRenkler.YuzeyAlt)) {
-        Text(text = if (yukleniyor) "Düşünüyor..." else cevap.ifEmpty { "Merhaba! Sana nasıl yardımcı olabilirim?" }, modifier = Modifier.padding(16.dp), color = Color.White)
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), 
+        shape = RoundedCornerShape(16.dp).copy(bottomStart = CornerSize(4.dp)),
+        colors = CardDefaults.cardColors(containerColor = YksRenkler.YuzeyAlt)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.SmartToy, contentDescription = null, tint = YksRenkler.Vurgu, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("AI Koç", color = YksRenkler.Vurgu, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            if (yukleniyor) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = YksRenkler.YaziSecond, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Yanıt üretiliyor...", color = YksRenkler.YaziSecond, fontSize = 14.sp)
+                }
+            } else {
+                Text(text = cevap.ifEmpty { "Merhaba! Hedeflerine ulaşman için sana nasıl yardımcı olabilirim?" }, color = Color.White, fontSize = 15.sp, lineHeight = 22.sp)
+            }
+        }
     }
 }
