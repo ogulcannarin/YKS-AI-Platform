@@ -296,6 +296,10 @@ fun YksAsistanUI(userEmail: String = "") {
                                 }
                                 Spacer(Modifier.height(16.dp))
                                 GradyanButon("✓ Çalışmayı Kaydet", YesilGradyan) {
+                                    val sharedPref = context.getSharedPreferences("profil_prefs", android.content.Context.MODE_PRIVATE)
+                                    val currentTotalMinutes = sharedPref.getInt("total_study_minutes_$userEmail", 0)
+                                    sharedPref.edit().putInt("total_study_minutes_$userEmail", currentTotalMinutes + (saniye / 60)).apply()
+
                                     apiService.calismaKaydet(StudyLogRequest(seciliDers, saniye/60)).enqueue(object : Callback<SimpleResponse> {
                                         override fun onResponse(call: Call<SimpleResponse>, response: Response<SimpleResponse>) {
                                             Toast.makeText(context, "Kaydedildi!", Toast.LENGTH_SHORT).show()

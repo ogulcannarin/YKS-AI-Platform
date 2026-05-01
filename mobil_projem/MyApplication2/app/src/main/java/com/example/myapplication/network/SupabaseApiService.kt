@@ -7,6 +7,7 @@ import retrofit2.http.POST
 
 data class AuthRequest(val email: String, val password: String)
 data class AuthResponse(val access_token: String?, val error_description: String?, val msg: String?)
+data class ResetPasswordRequest(val email: String)
 
 interface SupabaseApiService {
     @POST("auth/v1/signup")
@@ -41,6 +42,13 @@ interface SupabaseApiService {
         @Header("apikey") apiKey: String,
         @retrofit2.http.Query("email") emailEq: String
     ): Call<List<KullaniciKayitRequest>>
+
+    // Şifremi Unuttum için
+    @POST("auth/v1/recover")
+    fun resetPassword(
+        @Header("apikey") apiKey: String,
+        @Body request: ResetPasswordRequest
+    ): Call<Void>
 }
 
 data class IdTokenRequest(

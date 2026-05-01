@@ -11,8 +11,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -86,35 +88,27 @@ fun SoruCozEkrani(onGeriDon: () -> Unit) {
         ), label = "shimmerAlpha"
     )
 
-    val Purple600 = Color(0xFF6C4EE3)
-    val Purple100 = Color(0xFFEEEBFD)
-    val Purple50 = Color(0xFFF5F3FF)
-    val Slate900 = Color(0xFF1A1A2E)
-    val Slate700 = Color(0xFF374151)
-    val Slate400 = Color(0xFF9CA3AF)
-    val Slate100 = Color(0xFFF1F0F9)
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         "AI Soru Çözücü",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp,
-                        color = Slate900
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 20.sp,
+                        color = Color.White
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onGeriDon) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Geri", tint = Slate700)
+                    IconButton(onClick = onGeriDon, modifier = Modifier.padding(start = 8.dp).size(40.dp).background(YksRenkler.YuzeyAlt, CircleShape)) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Geri", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = YksRenkler.Arka),
                 windowInsets = WindowInsets(0)
             )
         },
-        containerColor = Slate100
+        containerColor = YksRenkler.Arka
     ) { innerPadding ->
 
         Column(
@@ -122,296 +116,146 @@ fun SoruCozEkrani(onGeriDon: () -> Unit) {
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 24.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-
-            // Hero upload card
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = Color.White,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Upload zone
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(160.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (imageUri != null) Purple50 else Slate100)
-                            .border(
-                                width = 1.5.dp,
-                                brush = if (imageUri != null)
-                                    Brush.horizontalGradient(listOf(Purple600, Color(0xFF9C6FE4)))
-                                else
-                                    Brush.horizontalGradient(listOf(Slate400, Slate400)),
-                                shape = RoundedCornerShape(14.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (imageUri != null) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(CircleShape)
-                                        .background(Purple100),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.CheckCircle,
-                                        contentDescription = null,
-                                        tint = Purple600,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-                                Text(
-                                    "Fotoğraf hazır",
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 14.sp,
-                                    color = Purple600
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(CircleShape)
-                                        .background(Slate100),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Image,
-                                        contentDescription = null,
-                                        tint = Slate400,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-                                Text(
-                                    "Soru fotoğrafını buraya yükle",
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 14.sp,
-                                    color = Slate700
-                                )
-                                Text(
-                                    "JPG, PNG desteklenir",
-                                    fontSize = 12.sp,
-                                    color = Slate400
-                                )
-                            }
-                        }
-                    }
-
-                    // Fotoğraf seç/değiştir butonu
-                    OutlinedButton(
-                        onClick = { launcher.launch("image/*") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color.Transparent,
-                            contentColor = Purple600
-                        ),
-                        border = ButtonDefaults.outlinedButtonBorder.copy(
-                            brush = Brush.horizontalGradient(listOf(Purple600, Color(0xFF9C6FE4)))
-                        )
-                    ) {
-                        Text(
-                            if (imageUri == null) "Fotoğraf Seç" else "Fotoğrafı Değiştir",
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            }
-
-            // Analiz Et butonu
-            Button(
-                onClick = {
-                    val base64 = imageUri?.let { uriToBase64(context, it) }
-                    if (base64 != null) {
-                        isYukleniyor = true
-                        apiService.yksSoruCoz(SoruCozRequest(image_base64 = base64))
-                            .enqueue(object : Callback<SoruCozResponse> {
-                                override fun onResponse(
-                                    call: Call<SoruCozResponse>,
-                                    response: Response<SoruCozResponse>
-                                ) {
-                                    isYukleniyor = false
-                                    if (response.isSuccessful) {
-                                        aiCevabi = response.body()?.cozum ?: "Cevap alınamadı."
-                                    }
-                                }
-                                override fun onFailure(call: Call<SoruCozResponse>, t: Throwable) {
-                                    isYukleniyor = false
-                                    aiCevabi = "Hata: ${t.message}"
-                                }
-                            })
-                    } else {
-                        Toast.makeText(context, "Önce bir fotoğraf seçmelisin!", Toast.LENGTH_SHORT).show()
-                    }
-                },
+            
+            // Yükleme Alanı
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(14.dp),
-                enabled = !isYukleniyor && imageUri != null,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Purple600,
-                    contentColor = Color.White,
-                    disabledContainerColor = Purple100,
-                    disabledContentColor = Color(0xFFB39FEC)
-                )
+                    .height(220.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(if (imageUri != null) YksRenkler.VurguSoft else YksRenkler.Yuzey)
+                    .border(
+                        width = 1.dp,
+                        brush = if (imageUri != null) VurguGradyan else androidx.compose.ui.graphics.SolidColor(YksRenkler.Kenar),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                    .clickable { launcher.launch("image/*") },
+                contentAlignment = Alignment.Center
             ) {
-                if (isYukleniyor) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                        Text(
-                            "Analiz ediliyor...",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
-                        )
-                    }
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Outlined.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            "Soruyu Çöz",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
-                        )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (imageUri != null) {
+                        Box(
+                            modifier = Modifier.size(64.dp).clip(CircleShape).background(YksRenkler.Vurgu.copy(alpha=0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = YksRenkler.Vurgu, modifier = Modifier.size(36.dp))
+                        }
+                        Text("Fotoğraf Hazır", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = YksRenkler.Vurgu)
+                        Text("Değiştirmek için dokun", fontSize = 12.sp, color = YksRenkler.YaziMuted)
+                    } else {
+                        Box(
+                            modifier = Modifier.size(64.dp).clip(CircleShape).background(YksRenkler.YuzeyAlt),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.Image, contentDescription = null, tint = YksRenkler.YaziMuted, modifier = Modifier.size(32.dp))
+                        }
+                        Text("Soru fotoğrafını buraya yükle", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color.White)
+                        Text("JPG, PNG formatları desteklenir", fontSize = 13.sp, color = YksRenkler.YaziSecond)
                     }
                 }
             }
 
-            // Cevap kartı — sadece cevap varsa veya yükleniyorsa göster
+            // Analiz Et Butonu
+            GradyanButon(
+                metin = if (isYukleniyor) "Analiz Ediliyor..." else "✨ Soruyu Çöz",
+                gradyan = VurguGradyan,
+                yukleniyor = isYukleniyor
+            ) {
+                val base64 = imageUri?.let { uriToBase64(context, it) }
+                if (base64 != null) {
+                    isYukleniyor = true
+                    apiService.yksSoruCoz(SoruCozRequest(image_base64 = base64))
+                        .enqueue(object : Callback<SoruCozResponse> {
+                            override fun onResponse(call: Call<SoruCozResponse>, response: Response<SoruCozResponse>) {
+                                isYukleniyor = false
+                                if (response.isSuccessful) {
+                                    aiCevabi = response.body()?.cozum ?: "Cevap alınamadı."
+                                } else {
+                                    aiCevabi = "Bağlantı hatası: ${response.code()}"
+                                }
+                            }
+                            override fun onFailure(call: Call<SoruCozResponse>, t: Throwable) {
+                                isYukleniyor = false
+                                aiCevabi = "Hata: ${t.message}"
+                            }
+                        })
+                } else {
+                    Toast.makeText(context, "Lütfen önce sorunun fotoğrafını yükleyin!", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            // Çözüm Kartı
             AnimatedVisibility(
                 visible = aiCevabi.isNotEmpty() || isYukleniyor,
-                enter = fadeIn() + slideInVertically { it / 2 }
+                enter = fadeIn() + expandVertically()
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.White
+                    colors = CardDefaults.cardColors(containerColor = YksRenkler.YuzeyAlt),
+                    border = BorderStroke(1.dp, YksRenkler.Kenar)
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(Purple600, Color(0xFF9C6FE4))
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Outlined.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Text(
-                                "AI Çözümü",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp,
-                                color = Slate900
-                            )
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = YksRenkler.Vurgu, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text("Yapay Zeka Çözümü", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
                         }
-
-                        Divider(color = Slate100, thickness = 1.dp)
-                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Spacer(Modifier.height(16.dp))
+                        Divider(color = YksRenkler.Kenar)
+                        Spacer(Modifier.height(16.dp))
 
                         if (isYukleniyor) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                repeat(4) { index ->
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                repeat(5) { index ->
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxWidth(if (index == 3) 0.6f else 1f)
-                                            .height(14.dp)
-                                            .clip(RoundedCornerShape(7.dp))
-                                            .background(Slate100.copy(alpha = shimmerAlpha))
+                                            .fillMaxWidth(if (index == 4) 0.5f else 1f)
+                                            .height(16.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(YksRenkler.Yuzey.copy(alpha = shimmerAlpha))
                                     )
                                 }
                             }
                         } else {
                             Text(
-                                aiCevabi,
-                                fontSize = 14.sp,
-                                lineHeight = 22.sp,
-                                color = Slate700
+                                text = aiCevabi,
+                                fontSize = 15.sp,
+                                lineHeight = 24.sp,
+                                color = YksRenkler.YaziPrimary
                             )
                         }
                     }
                 }
             }
 
-            // Boş durum placeholder — hiçbir şey yok ve yüklenmiyorsa
+            // Placeholder (Boş Durum)
             if (aiCevabi.isEmpty() && !isYukleniyor) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.White
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("✨", fontSize = 32.sp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = YksRenkler.YaziMuted, modifier = Modifier.size(48.dp))
                         Text(
-                            "Sorunun fotoğrafını yükle",
-                            fontWeight = FontWeight.Medium,
+                            "Soru fotoğrafını yükle,\nAI adım adım çözüm üretsin.",
+                            color = YksRenkler.YaziSecond,
+                            textAlign = TextAlign.Center,
                             fontSize = 15.sp,
-                            color = Slate900,
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            "AI adım adım çözüm üretsin",
-                            fontSize = 13.sp,
-                            color = Slate400,
-                            textAlign = TextAlign.Center
+                            lineHeight = 22.sp
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

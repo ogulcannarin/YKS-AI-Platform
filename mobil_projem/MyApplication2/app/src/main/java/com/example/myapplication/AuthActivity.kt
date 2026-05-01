@@ -40,6 +40,16 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
+object RetrofitClient {
+    val retrofit: Retrofit by lazy {
+        Retrofit.Builder()
+            .baseUrl(SupabaseConfig.SUPABASE_URL + "/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+    val apiService: SupabaseApiService by lazy { retrofit.create(SupabaseApiService::class.java) }
+}
+
 class AuthActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,14 +77,6 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
 
-    val retrofit = remember {
-        Retrofit.Builder()
-            .baseUrl(SupabaseConfig.SUPABASE_URL + "/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-    }
-    val apiService = remember { retrofit.create(SupabaseApiService::class.java) }
-
     // Google Sign-In Ayarları
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -82,7 +84,7 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
             .requestEmail()
             .build()
     }
-    val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
+    val googleSignInClient = remember(context, gso) { GoogleSignIn.getClient(context, gso) }
 
     // Google Sign-In Sonuç Dinleyici
     val googleAuthLauncher = rememberLauncherForActivityResult(
@@ -96,7 +98,7 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
                 if (idToken != null) {
                     isLoading = true
                     // Supabase'e ID Token'ı gönder
-                    apiService.loginWithIdToken(
+                    RetrofitClient.apiService.loginWithIdToken(
                         apiKey = SupabaseConfig.SUPABASE_KEY,
                         request = IdTokenRequest(id_token = idToken)
                     ).enqueue(object : Callback<AuthResponse> {
@@ -105,7 +107,23 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
                             if (response.isSuccessful && response.body()?.access_token != null) {
                                 Toast.makeText(context, "Google ile Giriş Başarılı!", Toast.LENGTH_SHORT).show()
                                 val googleEmail = account?.email ?: ""
-                                onLoginSuccess(googleEmail)
+                                val googleName = account?.displayName ?: googleEmail.substringBefore("@")
+                                val token = response.body()?.access_token
+                                
+                                // Google ile ilk kez girenleri kullanicilar tablosuna eklemeyi dene
+                                val profilRequest = com.example.myapplication.network.KullaniciKayitRequest(googleEmail, googleName)
+                                RetrofitClient.apiService.kayitEkle(
+                                    apiKey = SupabaseConfig.SUPABASE_KEY,
+                                    authHeader = "Bearer $token",
+                                    request = profilRequest
+                                ).enqueue(object : Callback<Void> {
+                                    override fun onResponse(call: Call<Void>, res: Response<Void>) {
+                                        onLoginSuccess(googleEmail)
+                                    }
+                                    override fun onFailure(call: Call<Void>, t: Throwable) {
+                                        onLoginSuccess(googleEmail)
+                                    }
+                                })
                             } else {
                                 Toast.makeText(context, "Supabase Google yetkilendirmesi başarısız", Toast.LENGTH_SHORT).show()
                             }
@@ -134,7 +152,7 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
         val request = AuthRequest(email, password)
         
         if (isLoginMode) {
-            apiService.login(SupabaseConfig.SUPABASE_KEY, request).enqueue(object : Callback<AuthResponse> {
+            RetrofitClient.apiService.login(SupabaseConfig.SUPABASE_KEY, request).enqueue(object : Callback<AuthResponse> {
                 override fun onResponse(call: Call<AuthResponse>, response: Response<AuthResponse>) {
                     isLoading = false
                     if (response.isSuccessful && response.body()?.access_token != null) {
@@ -150,7 +168,7 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
                 }
             })
         } else {
-            apiService.signup(SupabaseConfig.SUPABASE_KEY, request).enqueue(object : Callback<AuthResponse> {
+            RetrofitClient.apiService.signup(SupabaseConfig.SUPABASE_KEY, request).enqueue(object : Callback<AuthResponse> {
                 override fun onResponse(call: Call<AuthResponse>, response: Response<AuthResponse>) {
                     if (response.isSuccessful) {
                         val token = response.body()?.access_token
@@ -163,7 +181,7 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
                         }
 
                         val profilRequest = com.example.myapplication.network.KullaniciKayitRequest(email, username)
-                        apiService.kayitEkle(
+                        RetrofitClient.apiService.kayitEkle(
                             apiKey = SupabaseConfig.SUPABASE_KEY,
                             authHeader = "Bearer $token",
                             request = profilRequest
@@ -313,6 +331,43 @@ fun AuthScreen(onLoginSuccess: (String) -> Unit) {
                     unfocusedTextColor = Color.White
                 )
             )
+
+            AnimatedVisibility(visible = isLoginMode) {
+                Text(
+                    text = "Şifremi Unuttum",
+                    color = YksRenkler.Vurgu,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .clickable {
+                            if (email.isBlank()) {
+                                Toast.makeText(context, "Lütfen önce e-posta adresinizi girin.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                isLoading = true
+                                RetrofitClient.apiService.resetPassword(
+                                    SupabaseConfig.SUPABASE_KEY, 
+                                    com.example.myapplication.network.ResetPasswordRequest(email)
+                                ).enqueue(object : Callback<Void> {
+                                    override fun onResponse(call: Call<Void>, response: Response<Void>) {
+                                        isLoading = false
+                                        if (response.isSuccessful) {
+                                            Toast.makeText(context, "Şifre sıfırlama bağlantısı e-postanıza gönderildi!", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "Hata: ${response.code()}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                    override fun onFailure(call: Call<Void>, t: Throwable) {
+                                        isLoading = false
+                                        Toast.makeText(context, "Bağlantı Hatası", Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                            }
+                        },
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 

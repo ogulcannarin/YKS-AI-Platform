@@ -63,6 +63,15 @@ fun ProfilSayfasi(userEmail: String, onGeriDon: () -> Unit) {
     var profilKullaniciAdi by remember { mutableStateOf("Yükleniyor...") }
     var profilFotoUri by remember { mutableStateOf(sharedPref.getString("profil_foto_$userEmail", null)) }
 
+    val totalStudyMinutes = sharedPref.getInt("total_study_minutes_$userEmail", 0)
+    val studyHours = totalStudyMinutes / 60
+    val studyMins = totalStudyMinutes % 60
+    val (calismaDeger, calismaBirim) = if (studyHours > 0) {
+        Pair("$studyHours", "Saat $studyMins Dk")
+    } else {
+        Pair("$studyMins", "Dk")
+    }
+
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -182,8 +191,8 @@ fun ProfilSayfasi(userEmail: String, onGeriDon: () -> Unit) {
                 ) {
                     ProfilStatKarti(
                         baslik = "Çalışma",
-                        deger = "24",
-                        birim = "Saat",
+                        deger = calismaDeger,
+                        birim = calismaBirim,
                         icon = Icons.Rounded.Timer,
                         renk = YksRenkler.Vurgu,
                         modifier = Modifier.weight(1f)
