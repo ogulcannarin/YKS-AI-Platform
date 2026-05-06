@@ -66,6 +66,7 @@ enum class AltSekme(val baslik: String, val icon: androidx.compose.ui.graphics.v
     HESAPLA("Hesapla", Icons.Rounded.Calculate),
     AI("AI Asistan", Icons.Rounded.AutoAwesome),
     KRONOMETRE("Çalışma", Icons.Rounded.Timer),
+    KONU("Konular", Icons.Rounded.List),
     PROFIL("Profil", Icons.Rounded.Person)
 }
 
@@ -309,6 +310,11 @@ fun YksAsistanUI(userEmail: String = "") {
                                     })
                                 }
                             }
+                        }
+                    }
+                    AltSekme.KONU -> {
+                        Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(YksRenkler.Yuzey).border(1.dp, YksRenkler.Kenar, RoundedCornerShape(24.dp)).padding(24.dp)) {
+                            KonuTakipEkrani(userEmail)
                         }
                     }
                     else -> {}

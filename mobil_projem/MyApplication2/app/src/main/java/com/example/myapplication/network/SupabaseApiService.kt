@@ -49,6 +49,23 @@ interface SupabaseApiService {
         @Header("apikey") apiKey: String,
         @Body request: ResetPasswordRequest
     ): Call<Void>
+
+    // Konu Takip - Okuma
+    @retrofit2.http.GET("rest/v1/konu_takip")
+    fun getKonuTakip(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") authHeader: String,
+        @retrofit2.http.Query("email") emailEq: String
+    ): Call<List<KonuTakipResponse>>
+
+    // Konu Takip - Ekleme / Güncelleme
+    @POST("rest/v1/konu_takip")
+    fun upsertKonuTakip(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") authHeader: String,
+        @Header("Prefer") prefer: String = "resolution=merge-duplicates",
+        @Body request: KonuTakipRequest
+    ): Call<Void>
 }
 
 data class IdTokenRequest(
@@ -60,4 +77,20 @@ data class IdTokenRequest(
 data class KullaniciKayitRequest(
     val email: String,
     val kullanici_adi: String
+)
+
+// Konu Takip modelleri
+data class KonuTakipRequest(
+    val email: String,
+    val ders_adi: String,
+    val konu_adi: String,
+    val durum: String
+)
+
+data class KonuTakipResponse(
+    val id: String,
+    val email: String,
+    val ders_adi: String,
+    val konu_adi: String,
+    val durum: String
 )
