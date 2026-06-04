@@ -1,6 +1,8 @@
 package com.example.myapplication
 
 import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -30,28 +33,49 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
-// Varsayılan konular
+// ─── Konu Listesi ─────────────────────────────────────────────────────────────
+
 val DERS_KONULARI = mapOf(
-    "Matematik" to listOf("Temel Kavramlar", "Üslü Sayılar", "Köklü Sayılar", "Problemler", "Fonksiyonlar"),
-    "Türkçe" to listOf("Sözcükte Anlam", "Cümlede Anlam", "Paragraf", "Dil Bilgisi"),
-    "Fizik" to listOf("Fizik Bilimine Giriş", "Madde ve Özellikleri", "Hareket ve Kuvvet", "Enerji"),
-    "Kimya" to listOf("Kimya Bilimi", "Atom ve Periyodik Sistem", "Maddenin Halleri"),
-    "Biyoloji" to listOf("Canlıların Ortak Özellikleri", "Hücre", "Canlıların Sınıflandırılması"),
-    "Edebiyat" to listOf("Şiir Bilgisi", "İslamiyet Öncesi Edebiyat", "Halk Edebiyatı")
+    "Matematik" to listOf(
+        "Temel Kavramlar", "Üslü Sayılar", "Köklü Sayılar", "Problemler",
+        "Fonksiyonlar", "Trigonometri", "Logaritma", "Diziler"
+    ),
+    "Türkçe" to listOf(
+        "Sözcükte Anlam", "Cümlede Anlam", "Paragraf", "Dil Bilgisi",
+        "Yazım Kuralları", "Noktalama", "Edebi Türler"
+    ),
+    "Fizik" to listOf(
+        "Fizik Bilimine Giriş", "Madde ve Özellikleri", "Hareket ve Kuvvet",
+        "Enerji", "Basınç", "Isı ve Sıcaklık", "Elektrik"
+    ),
+    "Kimya" to listOf(
+        "Kimya Bilimi", "Atom ve Periyodik Sistem", "Maddenin Halleri",
+        "Kimyasal Bağlar", "Asitler ve Bazlar", "Çözeltiler"
+    ),
+    "Biyoloji" to listOf(
+        "Canlıların Ortak Özellikleri", "Hücre", "Canlıların Sınıflandırılması",
+        "Ekosistem", "Genetik", "İnsan Fizyolojisi"
+    ),
+    "Edebiyat" to listOf(
+        "Şiir Bilgisi", "İslamiyet Öncesi Edebiyat", "Halk Edebiyatı",
+        "Divan Edebiyatı", "Tanzimat Edebiyatı", "Modern Edebiyat"
+    )
 )
+
+// ─── KonuTakip Ekranı ─────────────────────────────────────────────────────────
 
 @Composable
 fun KonuTakipEkrani(userEmail: String) {
     val context = LocalContext.current
     var seciliDers by remember { mutableStateOf("Matematik") }
     var yukleniyor by remember { mutableStateOf(true) }
-    var konuDurumlari by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // konu_adi -> durum
+    var konuDurumlari by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     fun fetchKonular() {
         yukleniyor = true
         RetrofitClient.apiService.getKonuTakip(
             apiKey = SupabaseConfig.SUPABASE_KEY,
-            authHeader = "Bearer ${SupabaseConfig.SUPABASE_KEY}", // Sadece anon key okuması için (Eğer RLS yoksa)
+            authHeader = "Bearer ${SupabaseConfig.SUPABASE_KEY}",
             emailEq = "eq.$userEmail"
         ).enqueue(object : Callback<List<KonuTakipResponse>> {
             override fun onResponse(call: Call<List<KonuTakipResponse>>, response: Response<List<KonuTakipResponse>>) {
@@ -59,9 +83,7 @@ fun KonuTakipEkrani(userEmail: String) {
                 if (response.isSuccessful) {
                     val body = response.body() ?: emptyList()
                     val map = mutableMapOf<String, String>()
-                    body.filter { it.ders_adi == seciliDers }.forEach {
-                        map[it.konu_adi] = it.durum
-                    }
+                    body.filter { it.ders_adi == seciliDers }.forEach { map[it.konu_adi] = it.durum }
                     konuDurumlari = map
                 }
             }
@@ -94,22 +116,86 @@ fun KonuTakipEkrani(userEmail: String) {
         })
     }
 
-    LaunchedEffect(seciliDers) {
-        fetchKonular()
-    }
+    LaunchedEffect(seciliDers) { fetchKonular() }
+
+    val konular = DERS_KONULARI[seciliDers] ?: emptyList()
+    val tamamlanan = konular.count { konuDurumlari[it] == "bitti" }
+    val devamEden = konular.count { konuDurumlari[it] == "calisiliyor" }
+    val ilerleme = if (konular.isNotEmpty()) tamamlanan.toFloat() / konular.size.toFloat() else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = ilerleme,
+        animationSpec = tween(600, easing = EaseOutCubic),
+        label = "progress"
+    )
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        // Ders Seçimi
         DersSecimKarti(DERSLER, seciliDers) { seciliDers = it }
+
         Spacer(Modifier.height(16.dp))
 
+        // İlerleme Kartı
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(YksRenkler.YuzeyAlt)
+                .border(1.dp, YksRenkler.Kenar, RoundedCornerShape(16.dp))
+                .padding(16.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "İlerleme",
+                        color = YksRenkler.YaziSecond,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatusBadge("$tamamlanan Bitti", YksRenkler.Yesil)
+                        StatusBadge("$devamEden Devam", YksRenkler.Vurgu)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                // Progress bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(YksRenkler.Kenar)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(animatedProgress)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(YesilGradyan)
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "$tamamlanan / ${konular.size} konu tamamlandı",
+                    color = YksRenkler.YaziMuted,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Konu Listesi
         if (yukleniyor) {
             Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = YksRenkler.Vurgu)
+                CircularProgressIndicator(color = YksRenkler.Vurgu, strokeWidth = 3.dp)
             }
         } else {
-            val konular = DERS_KONULARI[seciliDers] ?: emptyList()
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(konular) { konu ->
@@ -124,18 +210,47 @@ fun KonuTakipEkrani(userEmail: String) {
 }
 
 @Composable
-fun KonuSatiri(konu: String, durum: String, onDurumDegistir: (String) -> Unit) {
-    val (icon, color) = when (durum) {
-        "bitti" -> Pair(Icons.Rounded.CheckCircle, YksRenkler.Yesil)
-        "calisiliyor" -> Pair(Icons.Rounded.Schedule, YksRenkler.Vurgu)
-        else -> Pair(Icons.Rounded.RadioButtonUnchecked, YksRenkler.YaziMuted)
+fun StatusBadge(metin: String, renk: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(renk.copy(alpha = 0.15f))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(metin, color = renk, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
+}
+
+@Composable
+fun KonuSatiri(konu: String, durum: String, onDurumDegistir: (String) -> Unit) {
+    val (icon, accentColor, bgAlpha, statusLabel) = when (durum) {
+        "bitti"        -> listOf(Icons.Rounded.CheckCircle, YksRenkler.Yesil, 0.08f, "Bitti")
+        "calisiliyor"  -> listOf(Icons.Rounded.Schedule, YksRenkler.Vurgu, 0.06f, "Çalışıyor")
+        else           -> listOf(Icons.Rounded.RadioButtonUnchecked, YksRenkler.YaziMuted, 0f, "Bekliyor")
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    val iconVec = icon as androidx.compose.ui.graphics.vector.ImageVector
+    val color = accentColor as Color
+    val alpha = bgAlpha as Float
+    val label = statusLabel as String
+
+    val bgColor by animateColorAsState(
+        targetValue = color.copy(alpha = alpha),
+        animationSpec = tween(200),
+        label = "row_bg_$konu"
+    )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(YksRenkler.YuzeyAlt)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bgColor)
+            .border(
+                1.dp,
+                if (durum == "calisilacak") YksRenkler.Kenar else color.copy(alpha = 0.3f),
+                RoundedCornerShape(14.dp)
+            )
             .clickable {
                 val nextDurum = when (durum) {
                     "calisilacak" -> "calisiliyor"
@@ -144,11 +259,34 @@ fun KonuSatiri(konu: String, durum: String, onDurumDegistir: (String) -> Unit) {
                 }
                 onDurumDegistir(nextDurum)
             }
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text = konu, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            // Sol renkli çizgi
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(20.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(color)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(text = konu, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
+        // Durum badge
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AnimatedContent(targetState = label, label = "status_$konu") { lbl ->
+                Text(
+                    text = lbl,
+                    color = color,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Icon(iconVec, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+        }
     }
 }

@@ -1,5 +1,11 @@
+# Python backend bağımlılıkları
+fastapi
+uvicorn
+pydantic
 pandas
 numpy
 scikit-learn
 openai
 python-dotenv
+supabase
+joblib

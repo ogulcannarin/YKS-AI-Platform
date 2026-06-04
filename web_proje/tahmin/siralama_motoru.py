@@ -57,16 +57,16 @@ class ModelYoneticisi:
 
         # Eğer modeller zaten eğitilmişse, doğrudan yükle
         if all(os.path.exists(p) for p in [model_ayt_path, model_tyt_path, le_path, df_ayt_path, df_tyt_path]):
-            print("⏳ Kayıtlı ML modelleri yükleniyor...")
+            print("[YUKLE] Kayitli ML modelleri yukleniyor...")
             self.model_ayt = joblib.load(model_ayt_path)
             self.model_tyt = joblib.load(model_tyt_path)
             self.le = joblib.load(le_path)
             self.df_ayt = joblib.load(df_ayt_path)
             self.df_tyt = joblib.load(df_tyt_path)
-            print("✅ Modeller başarıyla yüklendi (Hızlı Başlatma)!")
+            print("[OK] Modeller basariyla yuklendi (Hizli Baslama)!")
             return
 
-        print("⚙️ Modeller ilk kez eğitiliyor, lütfen bekleyin (Bu işlem sadece bir kez yapılır)...")
+        print("[EGIT] Modeller ilk kez egitiliyor, lutfen bekleyin (Bu islem sadece bir kez yapilir)...")
         # --- AYT MODELİ ---
         self.df_ayt = pd.read_csv(os.path.join(base_path, ayt_csv))
         self.df_ayt = self.df_ayt.rename(columns={'min_score': 'score', 'score_type': 'type'})
@@ -94,7 +94,7 @@ class ModelYoneticisi:
         joblib.dump(self.df_ayt, df_ayt_path)
         joblib.dump(self.df_tyt, df_tyt_path)
 
-        print("✅ Makine Öğrenmesi Modelleri başarıyla eğitildi ve kalıcı olarak kaydedildi!")
+        print("[OK] Makine Ogrenmesi Modelleri basariyla egitildi ve kalici olarak kaydedildi!")
 
     def tahmin_et(self, puan, tur):
         """Puan ve tür bilgisine göre sıralama tahmini yapar."""

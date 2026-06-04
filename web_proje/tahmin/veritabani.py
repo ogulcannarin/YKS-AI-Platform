@@ -32,11 +32,11 @@ def veriyi_buluta_kaydet(user_id, tyt_puan, say_puan, ea_puan, soz_puan, siralam
         
         # response.data objesi boş değilse (yani veri eklendiyse) başarılı sayıyoruz
         if response.data:
-            print("🚀 Veriler başarıyla buluta yedeklendi!")
+            print("[OK] Veriler basariyla buluta yedeklendi!")
         else:
-            print("❌ Kayıt sırasında bir hata oluştu.")
+            print("[HATA] Kayit sirasinda bir hata olustu.")
     except Exception as e:
-        print(f"❌ Kayıt sırasında bir hata oluştu: {e}")
+        print("[HATA] Kayit sirasinda bir hata olustu:", e)
 
 def en_iyileri_getir():
     try:
@@ -47,7 +47,7 @@ def en_iyileri_getir():
             .limit(10) \
             .execute()
         
-        print("\n--- 🏆 GÜNÜN ŞAMPİYONLARI (TOP 10) ---")
+        print("\n--- [TOP 10] GUNUN SAMPIYONLARI ---")
         for i, user in enumerate(response.data, 1):
             print(f"{i}. Kullanıcı: {user['user_id']} | Sıralama: {user['tahmini_sira']} | Puan: {user['say_puan']}")
     except Exception as e:
@@ -57,7 +57,7 @@ def ai_yorumu_kaydet(user_id, yorum):
     try:
         response = supabase.table("scores").update({"ai_yorum": yorum}).eq("user_id", user_id).execute()
         if response.data:
-            print("💡 AI Tavsiyesi başarıyla veritabanına eklendi!")
+            print("[OK] AI Tavsiyesi basariyla veritabanina eklendi!")
     except Exception as e:
         print(f"⚠️ AI Yorumu kaydedilemedi (Supabase 'scores' tablosuna 'ai_yorum' adında bir 'text' sütunu eklemeyi unutma!): {e}")
 
@@ -70,7 +70,7 @@ def calisma_kaydet(user_id, ders_adi, calisma_dakikasi):
     try:
         response = supabase.table("study_logs").insert(data).execute()
         if response.data:
-            print(f"⏱️ {ders_adi} dersi için {calisma_dakikasi} dakika çalışma süresi buluta kaydedildi!")
+            print(f"[OK] {ders_adi} dersi icin {calisma_dakikasi} dakika calisma suresi buluta kaydedildi!")
     except Exception as e:
         print(f"❌ Çalışma süresi kaydedilemedi (Supabase'de 'study_logs' tablosu oluşturduğundan emin ol): {e}")
 
@@ -88,7 +88,7 @@ def calisma_liderlik_tablosu():
             
             sirali = sorted(toplamlar.items(), key=lambda x: x[1], reverse=True)
             
-            print("\n--- 📚 ÇALIŞMA LİDERLİK TABLOSU (TOP 10) ---")
+            print("\n--- [TOP 10] CALISMA LIDERLIK TABLOSU ---")
             for i, (uid, dk) in enumerate(sirali[:10], 1):
                 saat = dk // 60
                 dakika = dk % 60
@@ -98,7 +98,7 @@ def calisma_liderlik_tablosu():
 
 if __name__ == "__main__":
     # Bu dosya doğrudan çalıştırıldığında test amaçlı bu mesajı verir
-    print("[BASARILI] Supabase baglantisi basariyla kuruldu!")
+    print("[OK] Supabase baglantisi basariyla kuruldu!")
     
     # Test amaçlı örnek kullanım:
     # veriyi_buluta_kaydet("user_123", 424.50, 501.16, 4894)
