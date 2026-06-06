@@ -67,14 +67,16 @@ data class SimpleResponse(
 
 // --- AI DANIŞMAN MODELLERİ ---
 data class AiDanismanRequest(
-    @SerializedName("user_id") val user_id: Int = 123,
+    @SerializedName("user_id") val user_id: String = "123",
     @SerializedName("soru") val soru: String,
     @SerializedName("puan") val puan: Double? = 400.0,
     @SerializedName("siralama") val siralama: Int? = 50000,
-    @SerializedName("puan_turu") val puan_turu: String? = "SAY"
+    @SerializedName("puan_turu") val puan_turu: String? = "SAY",
+    @SerializedName("session_id") val session_id: String? = null
 )
+
 data class SoruCozRequest(
-    @SerializedName("user_id") val user_id: Int = 123,
+    @SerializedName("user_id") val user_id: String = "123",
     @SerializedName("image_base64") val image_base64: String,
     @SerializedName("soru_metni") val soru_metni: String = "Bu soruyu adım adım açıklar mısın?"
 )
@@ -86,5 +88,32 @@ data class SoruCozResponse(
 
 data class AiResponse(
     @SerializedName("basarili") val basarili: Boolean,
-    @SerializedName("cevap") val cevap: String
+    @SerializedName("cevap") val cevap: String,
+    @SerializedName("session_id") val session_id: String? = null
+)
+
+// --- SOHBET GEÇMİŞİ MODELLERİ ---
+data class ChatMesaj(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("user_id") val user_id: String,
+    @SerializedName("session_id") val session_id: String,
+    @SerializedName("role") val role: String,   // "user" veya "ai"
+    @SerializedName("content") val content: String,
+    @SerializedName("created_at") val created_at: String? = null
+)
+
+data class ChatOturum(
+    @SerializedName("session_id") val session_id: String,
+    @SerializedName("ilk_mesaj") val ilk_mesaj: String,
+    @SerializedName("created_at") val created_at: String? = null
+)
+
+data class SohbetGecmisiResponse(
+    @SerializedName("basarili") val basarili: Boolean,
+    @SerializedName("mesajlar") val mesajlar: List<ChatMesaj>? = null
+)
+
+data class SohbetOturumlariResponse(
+    @SerializedName("basarili") val basarili: Boolean,
+    @SerializedName("oturumlar") val oturumlar: List<ChatOturum>? = null
 )

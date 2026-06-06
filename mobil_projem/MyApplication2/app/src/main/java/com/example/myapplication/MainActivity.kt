@@ -128,10 +128,28 @@ fun YksAsistanUI(userEmail: String = "") {
         while (calisiyorMu) { delay(1000L); saniye++ }
     }
 
-    // AI
+    // AI - Sohbet Hafızası
     var aiSoru by remember { mutableStateOf("") }
-    var aiCevap by remember { mutableStateOf("") }
+    var aiMesajlar by remember { mutableStateOf<List<Pair<String,String>>>(emptyList()) } // Pair(role, content)
     var aiYukleniyor by remember { mutableStateOf(false) }
+    var aiSessionId by remember { mutableStateOf<String?>(null) }
+    var aiOturumlar by remember { mutableStateOf<List<ChatOturum>>(emptyList()) }
+    var aiOturumGoster by remember { mutableStateOf(false) }
+    var aiOturumYukleniyor by remember { mutableStateOf(false) }
+
+    // Oturumları yükle (sekme açılınca)
+    LaunchedEffect(altSekme) {
+        if (altSekme == AltSekme.AI && aiOturumlar.isEmpty()) {
+            aiOturumYukleniyor = true
+            apiService.sohbetOturumlariniGetir(userEmail).enqueue(object : Callback<SohbetOturumlariResponse> {
+                override fun onResponse(call: Call<SohbetOturumlariResponse>, response: Response<SohbetOturumlariResponse>) {
+                    aiOturumYukleniyor = false
+                    aiOturumlar = response.body()?.oturumlar ?: emptyList()
+                }
+                override fun onFailure(call: Call<SohbetOturumlariResponse>, t: Throwable) { aiOturumYukleniyor = false }
+            })
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -234,25 +252,242 @@ fun YksAsistanUI(userEmail: String = "") {
                                     aktifSekme = aiSekme,
                                     onSekme = { aiSekme = it }
                                 )
-                                Spacer(Modifier.height(16.dp))
+                                Spacer(Modifier.height(12.dp))
+
                                 if (aiSekme == "SOHBET") {
-                                    AiKocBubble(aiCevap, aiYukleniyor)
+                                    // ── Geçmiş Oturumlar Paneli ──────────────────────
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(YksRenkler.YuzeyAlt)
+                                            .border(1.dp, YksRenkler.Kenar, RoundedCornerShape(16.dp))
+                                    ) {
+                                        Column {
+                                            // Başlık satırı
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { aiOturumGoster = !aiOturumGoster }
+                                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Rounded.History, contentDescription = null, tint = YksRenkler.Vurgu, modifier = Modifier.size(18.dp))
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Geçmiş Sohbetler", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                    if (aiOturumlar.isNotEmpty()) {
+                                                        Spacer(Modifier.width(8.dp))
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .clip(RoundedCornerShape(10.dp))
+                                                                .background(YksRenkler.Vurgu)
+                                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        ) {
+                                                            Text("${aiOturumlar.size}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                }
+                                                Icon(
+                                                    if (aiOturumGoster) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                                    contentDescription = null,
+                                                    tint = YksRenkler.YaziMuted,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+
+                                            // Oturum listesi
+                                            AnimatedVisibility(visible = aiOturumGoster) {
+                                                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                                                    HorizontalDivider(color = YksRenkler.Kenar)
+                                                    if (aiOturumYukleniyor) {
+                                                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                                            CircularProgressIndicator(color = YksRenkler.Vurgu, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                        }
+                                                    } else if (aiOturumlar.isEmpty()) {
+                                                        Text(
+                                                            "Henüz sohbet geçmişi yok",
+                                                            color = YksRenkler.YaziMuted,
+                                                            fontSize = 13.sp,
+                                                            modifier = Modifier.padding(16.dp)
+                                                        )
+                                                    } else {
+                                                        aiOturumlar.forEach { oturum ->
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clickable {
+                                                                        // Bu oturumu yükle
+                                                                        aiSessionId = oturum.session_id
+                                                                        aiYukleniyor = true
+                                                                        aiOturumGoster = false
+                                                                        apiService.sohbetGecmisiniGetir(userEmail, oturum.session_id)
+                                                                            .enqueue(object : Callback<SohbetGecmisiResponse> {
+                                                                                override fun onResponse(call: Call<SohbetGecmisiResponse>, response: Response<SohbetGecmisiResponse>) {
+                                                                                    aiYukleniyor = false
+                                                                                    aiMesajlar = response.body()?.mesajlar?.map {
+                                                                                        Pair(it.role, it.content)
+                                                                                    } ?: emptyList()
+                                                                                }
+                                                                                override fun onFailure(call: Call<SohbetGecmisiResponse>, t: Throwable) { aiYukleniyor = false }
+                                                                            })
+                                                                    }
+                                                                    .background(
+                                                                        if (aiSessionId == oturum.session_id) YksRenkler.VurguSoft else Color.Transparent
+                                                                    )
+                                                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Icon(Icons.Rounded.Chat, contentDescription = null, tint = YksRenkler.YaziMuted, modifier = Modifier.size(14.dp))
+                                                                Spacer(Modifier.width(10.dp))
+                                                                Text(
+                                                                    oturum.ilk_mesaj,
+                                                                    color = if (aiSessionId == oturum.session_id) YksRenkler.Vurgu else YksRenkler.YaziSecond,
+                                                                    fontSize = 13.sp,
+                                                                    maxLines = 1,
+                                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                                    modifier = Modifier.weight(1f)
+                                                                )
+                                                            }
+                                                            HorizontalDivider(color = YksRenkler.Kenar.copy(alpha = 0.4f))
+                                                        }
+                                                    }
+
+                                                    // Yeni Sohbet Butonu
+                                                    TextButton(
+                                                        onClick = {
+                                                            aiMesajlar = emptyList()
+                                                            aiSessionId = null
+                                                            aiOturumGoster = false
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                                                    ) {
+                                                        Icon(Icons.Rounded.Add, contentDescription = null, tint = YksRenkler.Vurgu, modifier = Modifier.size(16.dp))
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text("+ Yeni Sohbet", color = YksRenkler.Vurgu, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(Modifier.height(12.dp))
+
+                                    // ── Mesaj Baloncukları ───────────────────────────
+                                    if (aiMesajlar.isNotEmpty()) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(YksRenkler.YuzeyAlt)
+                                                .border(1.dp, YksRenkler.Kenar, RoundedCornerShape(16.dp))
+                                                .padding(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            aiMesajlar.forEach { (rol, icerik) ->
+                                                val isUser = rol == "user"
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+                                                ) {
+                                                    if (!isUser) {
+                                                        Box(
+                                                            modifier = Modifier.size(28.dp).clip(CircleShape).background(VurguGradyan),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(Icons.Rounded.SmartToy, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                        }
+                                                        Spacer(Modifier.width(8.dp))
+                                                    }
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f, fill = false)
+                                                            .clip(RoundedCornerShape(
+                                                                topStart = if (isUser) 14.dp else 4.dp,
+                                                                topEnd = if (isUser) 4.dp else 14.dp,
+                                                                bottomStart = 14.dp,
+                                                                bottomEnd = 14.dp
+                                                            ))
+                                                            .background(if (isUser) YksRenkler.Vurgu else YksRenkler.Yuzey)
+                                                            .border(
+                                                                1.dp,
+                                                                if (isUser) Color.Transparent else YksRenkler.Kenar,
+                                                                RoundedCornerShape(topStart = if (isUser) 14.dp else 4.dp, topEnd = if (isUser) 4.dp else 14.dp, bottomStart = 14.dp, bottomEnd = 14.dp)
+                                                            )
+                                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = icerik,
+                                                            color = Color.White,
+                                                            fontSize = 14.sp,
+                                                            lineHeight = 22.sp
+                                                        )
+                                                    }
+                                                    if (isUser) {
+                                                        Spacer(Modifier.width(8.dp))
+                                                        Box(
+                                                            modifier = Modifier.size(28.dp).clip(CircleShape).background(YksRenkler.Yesil),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(Icons.Rounded.Person, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                    } else {
+                                        // İlk açılış - AI karşılama
+                                        AiKocBubble("", aiYukleniyor)
+                                    }
+
+                                    if (aiYukleniyor && aiMesajlar.isNotEmpty()) {
+                                        AiKocBubble("", true)
+                                    }
+
+                                    // ── Soru Giriş Alanı ─────────────────────────────
                                     OutlinedTextField(
                                         value = aiSoru,
                                         onValueChange = { aiSoru = it },
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                         placeholder = { Text("AI Koç'a bir soru sor...", color = YksRenkler.YaziMuted) },
                                         shape = RoundedCornerShape(16.dp),
                                         trailingIcon = {
                                             if (aiSoru.isNotBlank()) {
                                                 IconButton(onClick = {
+                                                    val soru = aiSoru
+                                                    aiSoru = ""
                                                     aiYukleniyor = true
-                                                    apiService.yksAiDanis(AiDanismanRequest(soru = aiSoru)).enqueue(object : Callback<AiResponse> {
+                                                    aiMesajlar = aiMesajlar + Pair("user", soru)
+                                                    apiService.yksAiDanis(
+                                                        AiDanismanRequest(
+                                                            user_id = userEmail,
+                                                            soru = soru,
+                                                            session_id = aiSessionId
+                                                        )
+                                                    ).enqueue(object : Callback<AiResponse> {
                                                         override fun onResponse(call: Call<AiResponse>, response: Response<AiResponse>) {
                                                             aiYukleniyor = false
-                                                            aiCevap = response.body()?.cevap ?: "Yanıt alınamadı."
+                                                            val body = response.body()
+                                                            if (body != null) {
+                                                                if (aiSessionId == null) {
+                                                                    aiSessionId = body.session_id
+                                                                    // Oturum listesini güncelle
+                                                                    apiService.sohbetOturumlariniGetir(userEmail).enqueue(object : Callback<SohbetOturumlariResponse> {
+                                                                        override fun onResponse(call: Call<SohbetOturumlariResponse>, r: Response<SohbetOturumlariResponse>) {
+                                                                            aiOturumlar = r.body()?.oturumlar ?: emptyList()
+                                                                        }
+                                                                        override fun onFailure(call: Call<SohbetOturumlariResponse>, t: Throwable) {}
+                                                                    })
+                                                                }
+                                                                aiMesajlar = aiMesajlar + Pair("ai", body.cevap)
+                                                            }
                                                         }
-                                                        override fun onFailure(call: Call<AiResponse>, t: Throwable) { aiYukleniyor = false }
+                                                        override fun onFailure(call: Call<AiResponse>, t: Throwable) {
+                                                            aiYukleniyor = false
+                                                            aiMesajlar = aiMesajlar + Pair("ai", "Bağlantı hatası. Backend çalışıyor mu?")
+                                                        }
                                                     })
                                                 }) {
                                                     Icon(Icons.Rounded.Send, contentDescription = "Gönder", tint = YksRenkler.Vurgu)
@@ -269,17 +504,42 @@ fun YksAsistanUI(userEmail: String = "") {
                                     )
                                     GradyanButon("🚀  Soruyu Gönder", VurguGradyan, yukleniyor = aiYukleniyor) {
                                         if (aiSoru.isBlank()) return@GradyanButon
+                                        val soru = aiSoru
+                                        aiSoru = ""
                                         aiYukleniyor = true
-                                        apiService.yksAiDanis(AiDanismanRequest(soru = aiSoru)).enqueue(object : Callback<AiResponse> {
+                                        aiMesajlar = aiMesajlar + Pair("user", soru)
+                                        apiService.yksAiDanis(
+                                            AiDanismanRequest(
+                                                user_id = userEmail,
+                                                soru = soru,
+                                                session_id = aiSessionId
+                                            )
+                                        ).enqueue(object : Callback<AiResponse> {
                                             override fun onResponse(call: Call<AiResponse>, response: Response<AiResponse>) {
                                                 aiYukleniyor = false
-                                                aiCevap = response.body()?.cevap ?: "Yanıt alınamadı."
+                                                val body = response.body()
+                                                if (body != null) {
+                                                    if (aiSessionId == null) {
+                                                        aiSessionId = body.session_id
+                                                        apiService.sohbetOturumlariniGetir(userEmail).enqueue(object : Callback<SohbetOturumlariResponse> {
+                                                            override fun onResponse(call: Call<SohbetOturumlariResponse>, r: Response<SohbetOturumlariResponse>) {
+                                                                aiOturumlar = r.body()?.oturumlar ?: emptyList()
+                                                            }
+                                                            override fun onFailure(call: Call<SohbetOturumlariResponse>, t: Throwable) {}
+                                                        })
+                                                    }
+                                                    aiMesajlar = aiMesajlar + Pair("ai", body.cevap)
+                                                }
                                             }
-                                            override fun onFailure(call: Call<AiResponse>, t: Throwable) { aiYukleniyor = false }
+                                            override fun onFailure(call: Call<AiResponse>, t: Throwable) {
+                                                aiYukleniyor = false
+                                                aiMesajlar = aiMesajlar + Pair("ai", "Bağlantı hatası.")
+                                            }
                                         })
                                     }
+
                                 } else {
-                                    // Soru Çöz Kartı
+                                    // ── Soru Çöz Kartı ───────────────────────────────
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()

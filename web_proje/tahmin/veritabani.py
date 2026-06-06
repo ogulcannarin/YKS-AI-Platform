@@ -96,6 +96,87 @@ def calisma_liderlik_tablosu():
     except Exception as e:
         print(f"Çalışma liderlik tablosu alınamadı: {e}")
 
+# ─── SOHBET HAFIZASI ─────────────────────────────────────────────────────────
+
+def mesaj_kaydet(user_id, session_id, role, content):
+    """Bir mesajı Supabase chat_history tablosuna kaydeder."""
+    try:
+        response = supabase.table("chat_history").insert({
+            "user_id": str(user_id),
+            "session_id": str(session_id),
+            "role": role,
+            "content": content
+        }).execute()
+        if response.data:
+            print(f"[OK] Mesaj kaydedildi ({role})")
+        return True
+    except Exception as e:
+        print(f"[HATA] Mesaj kaydedilemedi: {e}")
+        return False
+
+def sohbet_gecmisi_getir(user_id, session_id=None, limit=100):
+    """Belirli bir oturumun veya kullanicinin tum sohbet gecmisini getirir."""
+    try:
+        query = supabase.table("chat_history") \
+            .select("*") \
+            .eq("user_id", str(user_id))
+        if session_id:
+            query = query.eq("session_id", str(session_id))
+        # supabase-py v2: desc=True, v1: ascending=False
+        try:
+            response = query.order("created_at", desc=False).limit(limit).execute()
+        except TypeError:
+            response = query.order("created_at", ascending=True).limit(limit).execute()
+        print(f"[DEBUG] sohbet_gecmisi_getir user={user_id} session={session_id} => {len(response.data or [])} mesaj")
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"[HATA] Sohbet gecmisi alinamadi: {e}")
+        return []
+
+def sohbet_oturumlarini_getir(user_id, limit=20):
+    """Kullanicinin tum sohbet oturumlarini, her oturumun ilk mesajiyla listeler."""
+    try:
+        print(f"[DEBUG] Oturumlar sorgulanıyor: user_id={user_id}")
+        # supabase-py v2: desc=True, v1: ascending=False
+        try:
+            response = supabase.table("chat_history") \
+                .select("session_id, content, role, created_at") \
+                .eq("user_id", str(user_id)) \
+                .eq("role", "user") \
+                .order("created_at", desc=True) \
+                .limit(limit) \
+                .execute()
+        except TypeError:
+            response = supabase.table("chat_history") \
+                .select("session_id, content, role, created_at") \
+                .eq("user_id", str(user_id)) \
+                .eq("role", "user") \
+                .order("created_at", ascending=False) \
+                .limit(limit) \
+                .execute()
+
+        print(f"[DEBUG] Ham veri: {response.data}")
+        if not response.data:
+            return []
+        # Her session_id'nin ilk mesajini al
+        gorulmus = set()
+        oturumlar = []
+        for mesaj in response.data:
+            sid = mesaj["session_id"]
+            if sid not in gorulmus:
+                gorulmus.add(sid)
+                oturumlar.append({
+                    "session_id": sid,
+                    "ilk_mesaj": mesaj["content"][:60] + "..." if len(mesaj["content"]) > 60 else mesaj["content"],
+                    "created_at": mesaj["created_at"]
+                })
+        print(f"[DEBUG] {len(oturumlar)} oturum bulundu")
+        return oturumlar
+    except Exception as e:
+        print(f"[HATA] Oturumlar alinamadi: {e}")
+        import traceback; traceback.print_exc()
+        return []
+
 if __name__ == "__main__":
     # Bu dosya doğrudan çalıştırıldığında test amaçlı bu mesajı verir
     print("[OK] Supabase baglantisi basariyla kuruldu!")

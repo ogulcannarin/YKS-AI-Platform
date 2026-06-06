@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Plus, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Plus, Sparkles, MessageSquare, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { supabase } from '../supabaseClient';
 
 const INITIAL_MSG = {
   role: 'ai',
@@ -14,16 +15,91 @@ const SUGGESTED_QUESTIONS = [
   'Sıralamamı nasıl yükseltirim?',
 ];
 
+function formatDate(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Bugün';
+  if (diffDays === 1) return 'Dün';
+  return `${diffDays} gün önce`;
+}
+
 export default function AiDanisman({ session, results }) {
-  const [soru, setSoru]         = useState('');
-  const [mesajlar, setMesajlar] = useState([INITIAL_MSG]);
+  const [soru, setSoru]             = useState('');
+  const [mesajlar, setMesajlar]     = useState([INITIAL_MSG]);
   const [yukleniyor, setYukleniyor] = useState(false);
+  const [sessionId, setSessionId]   = useState(null);
+  const [kaydedildi, setKaydedildi] = useState(null); // null=belirsiz, true=OK, false=hata
+  const [oturumlar, setOturumlar]   = useState([]);
+  const [oturumYukleniyor, setOturumYukleniyor] = useState(true);
+  const [aktifSession, setAktifSession] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef       = useRef(null);
 
+  const userId = session?.user?.email || session?.user?.id || '123';
+
+  // Sayfa açılınca geçmiş oturumları yükle
+  useEffect(() => {
+    fetchOturumlar();
+  }, [userId]);
+
+  // Mesajlar değişince en alta kaydır
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mesajlar]);
+
+  const fetchOturumlar = async () => {
+    setOturumYukleniyor(true);
+    try {
+      console.log('[AiDanisman] fetchOturumlar çağrıldı, userId:', userId);
+      const res = await fetch(`http://127.0.0.1:8000/sohbet-oturumlari/${userId}`);
+      const data = await res.json();
+      console.log('[AiDanisman] API yanıtı:', data);
+      if (data.basarili) {
+        setOturumlar(data.oturumlar || []);
+        console.log('[AiDanisman] Oturum sayısı:', (data.oturumlar || []).length);
+      } else {
+        console.error('[AiDanisman] API basarili=false:', data);
+      }
+    } catch (err) {
+      console.error('[AiDanisman] fetchOturumlar hatası:', err);
+    } finally {
+      setOturumYukleniyor(false);
+    }
+  };
+
+  // Belirli bir oturumu yükle
+  const oturumuYukle = async (sid) => {
+    setAktifSession(sid);
+    setYukleniyor(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/sohbet-gecmisi/${userId}?session_id=${sid}`);
+      const data = await res.json();
+      if (data.basarili && data.mesajlar.length > 0) {
+        const yuklenenMesajlar = data.mesajlar.map(m => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        }));
+        setMesajlar(yuklenenMesajlar);
+        setSessionId(sid);
+      }
+    } catch {
+      setMesajlar([INITIAL_MSG]);
+    } finally {
+      setYukleniyor(false);
+    }
+  };
+
+  // Yeni sohbet başlat
+  const yeniSohbetBaslat = () => {
+    setMesajlar([INITIAL_MSG]);
+    setSessionId(null);
+    setAktifSession(null);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
 
   const handleDanis = async (sorguText) => {
     const q = sorguText ?? soru;
@@ -36,11 +112,12 @@ export default function AiDanisman({ session, results }) {
 
     try {
       const payload = {
-        user_id: 123,
+        user_id: userId,
         soru: q,
         puan: results?.SAY?.puan || 0,
         siralama: results?.SAY?.siralama || 0,
         puan_turu: 'SAY',
+        session_id: sessionId,  // Mevcut oturum ID'si gönderilir
       };
       const res  = await fetch('http://127.0.0.1:8000/ai-danis', {
         method: 'POST',
@@ -50,8 +127,17 @@ export default function AiDanisman({ session, results }) {
       const data = await res.json();
 
       if (res.ok && data.basarili) {
+        // Backend'den gelen session_id'yi kaydet (ilk mesajda yeni oluşturulur)
+        if (data.session_id && !sessionId) {
+          setSessionId(data.session_id);
+          setAktifSession(data.session_id);
+          // Oturum listesini güncelle
+          setTimeout(fetchOturumlar, 500);
+        }
+        setKaydedildi(data.kaydedildi !== false); // false ise kayıt başarısız
         setMesajlar(prev => [...prev, { role: 'ai', content: data.cevap }]);
       } else {
+        setKaydedildi(false);
         setMesajlar(prev => [...prev, { role: 'ai', content: 'Sistem hatası: ' + (data.detail || 'Bağlantı koptu.') }]);
       }
     } catch {
@@ -82,49 +168,64 @@ export default function AiDanisman({ session, results }) {
 
       {/* ── Sidebar ── */}
       <div style={{
-        width: '220px', flexShrink: 0,
+        width: '240px', flexShrink: 0,
         borderRight: '1px solid var(--border-subtle)',
         display: 'flex', flexDirection: 'column',
         background: 'rgba(0,0,0,0.2)',
         padding: '1.25rem 0.75rem',
         gap: '0.5rem',
+        overflowY: 'auto',
       }}>
         <button
           className="btn btn-primary btn-sm btn-full"
           style={{ marginBottom: '0.75rem', justifyContent: 'flex-start' }}
-          onClick={() => setMesajlar([INITIAL_MSG])}
+          onClick={yeniSohbetBaslat}
         >
           <Plus size={14} /> Yeni Sohbet
         </button>
 
-        <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', padding: '0 0.5rem', fontFamily: 'var(--font-mono)' }}>
-          Son Oturumlar
+        <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', padding: '0 0.5rem', fontFamily: 'var(--font-mono)', marginBottom: '0.25rem' }}>
+          Geçmiş Sohbetler
         </div>
 
-        {[
-          { label: 'Tıp Fakültesi Hedefi', active: true },
-          { label: 'TYT Matematik Netleri', active: false },
-          { label: 'Haftalık Plan', active: false },
-        ].map((s, i) => (
-          <button key={i} style={{
-            background: s.active ? 'var(--neon-purple-dim)' : 'transparent',
-            border: `1px solid ${s.active ? 'rgba(139,127,232,0.25)' : 'transparent'}`,
-            borderRadius: 'var(--radius-md)',
-            padding: '0.55rem 0.75rem',
-            color: s.active ? 'var(--neon-purple)' : 'var(--text-muted)',
-            fontSize: '0.8rem',
-            textAlign: 'left',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-body)',
-            transition: 'all 0.2s',
-            width: '100%',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
-            {s.label}
-          </button>
-        ))}
+        {oturumYukleniyor ? (
+          <div style={{ padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)' }}>
+            Yükleniyor...
+          </div>
+        ) : oturumlar.length === 0 ? (
+          <div style={{ padding: '0.75rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+            <MessageSquare size={20} opacity={0.3} />
+            <span>Henüz sohbet yok</span>
+          </div>
+        ) : (
+          oturumlar.map((o) => (
+            <button
+              key={o.session_id}
+              onClick={() => oturumuYukle(o.session_id)}
+              style={{
+                background: aktifSession === o.session_id ? 'var(--neon-purple-dim)' : 'transparent',
+                border: `1px solid ${aktifSession === o.session_id ? 'rgba(139,127,232,0.25)' : 'transparent'}`,
+                borderRadius: 'var(--radius-md)',
+                padding: '0.6rem 0.75rem',
+                color: aktifSession === o.session_id ? 'var(--neon-purple)' : 'var(--text-muted)',
+                fontSize: '0.78rem',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-body)',
+                transition: 'all 0.2s',
+                width: '100%',
+              }}
+            >
+              <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '0.2rem' }}>
+                {o.ilk_mesaj}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.68rem', opacity: 0.6 }}>
+                <Clock size={10} />
+                {formatDate(o.created_at)}
+              </div>
+            </button>
+          ))
+        )}
 
         {/* Context info */}
         {results && (
@@ -170,13 +271,23 @@ export default function AiDanisman({ session, results }) {
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem' }}>AI Koç</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', color: 'var(--neon-green)' }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--neon-green)', display: 'inline-block', boxShadow: '0 0 6px var(--neon-green)' }} />
-              Çevrimiçi · YKS Uzmanı
+              Çevrimiçi · {sessionId ? `Oturum aktif` : 'Yeni sohbet'}
             </div>
           </div>
 
-          <div style={{ marginLeft: 'auto' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {sessionId && (
+              <span style={{
+                fontSize: '0.68rem',
+                color: kaydedildi === false ? '#ff4d4d' : 'var(--neon-green)',
+                fontFamily: 'var(--font-mono)',
+                opacity: 0.85
+              }}>
+                {kaydedildi === false ? '⚠️ Kaydedilemedi (Supabase RLS?)' : '✓ Kaydedildi'}
+              </span>
+            )}
             <span className="badge badge-purple">
-              <Sparkles size={10} /> Gemini AI
+              <Sparkles size={10} /> GPT-4o
             </span>
           </div>
         </div>
