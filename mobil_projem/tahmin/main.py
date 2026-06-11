@@ -3,13 +3,14 @@ from pydantic import BaseModel
 from typing import Optional, Dict
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import uuid
 
 # Kendi modüllerin
 from soru_cozucu import soruyu_analiz_et
 from puan_hesaplama import tyt_puan_hesapla, ayt_say_puan_hesapla, ayt_ea_puan_hesapla, ayt_soz_puan_hesapla
 from siralama_motoru import ModelYoneticisi
-from veritabani import veriyi_buluta_kaydet, calisma_kaydet, ai_yorumu_kaydet
-from ai_danisman import client 
+from veritabani import veriyi_buluta_kaydet, calisma_kaydet, ai_yorumu_kaydet, mesaj_kaydet, sohbet_gecmisi_getir, sohbet_oturumlarini_getir
+from ai_danisman import client
 
 app = FastAPI(title="YKS Master API - Vision Edition")
 
@@ -58,20 +59,21 @@ class HesaplaRequest(BaseModel):
     ayt_soz: Optional[AytSozelNetleri] = None
 
 class StudyLogRequest(BaseModel):
-    user_id: int = 123
+    user_id: str = "123"
     ders_adi: str
     sure: int
 
 class AiDanismanRequest(BaseModel):
-    user_id: int = 123
+    user_id: str = "123"          # String olarak düzeltildi (email geliyordu)
     soru: str
     puan: Optional[float] = 400.0
     siralama: Optional[int] = 50000
     puan_turu: Optional[str] = "SAY"
+    session_id: Optional[str] = None  # Mobil uygulamanın gönderdiği alan eklendi
 
-# YENİ: Soru Çözme Modeli
+# Soru Çözme Modeli
 class SoruCozRequest(BaseModel):
-    user_id: int = 123
+    user_id: str = "123"
     image_base64: str
     soru_metni: Optional[str] = "Bu soruyu adım adım açıklar mısın?"
 
@@ -123,17 +125,56 @@ async def calisma_ekle(veri: StudyLogRequest):
 @app.post("/ai-danis")
 async def ai_danisman_cevapla(veri: AiDanismanRequest):
     try:
-        gercek_okullar = motor.gercek_okullari_getir(veri.puan, veri.puan_turu)
-        mesajlar = [
-            {"role": "system", "content": "Sen 'Oracle' adında gelişmiş, cyberpunk temalı bir YKS Yapay Zeka Koçusun. Bir hacker/sistem yöneticisi dili kullanarak (örneğin: 'Sistem analizi tamamlandı', 'Açıklarını hackle', 'Veri ağlarına bağlanıldı') ama aynı zamanda öğrenciyi kesinlikle motive ederek ve YKS tercih/çalışma sürecinde gerçekçi verilerle yardımcı olan elit bir asistansın. Sana öğrencinin puanı, sıralaması ve gidebileceği okullar verilecek. Yanıtlarında Markdown kullan ve havalı, fütüristik bir üslup takın."},
-            {"role": "user", "content": f"Sorum: {veri.soru}\nPuan Türüm: {veri.puan_turu}\nPuanım: {veri.puan}\nTahmini Sıralamam: {veri.siralama}\nKazanabileceğim Bazı Okullar: {gercek_okullar}"}
+        # Oturum yönetimi
+        session_id = veri.session_id or str(uuid.uuid4())
+
+        # Geçmiş mesajları çek
+        gecmis = sohbet_gecmisi_getir(veri.user_id, session_id)
+
+        # OpenAI mesaj listesi oluştur
+        mesaj_listesi = [
+            {"role": "system", "content": "Sen 'Oracle' adında gelişmiş, cyberpunk temalı bir YKS Yapay Zeka Koçusun. Bir hacker/sistem yöneticisi dili kullanarak (örneğin: 'Sistem analizi tamamlandı', 'Açıklarını hackle', 'Veri ağlarına bağlanıldı') ama aynı zamanda öğrenciyi kesinlikle motive ederek ve YKS tercih/çalışma sürecinde gerçekçi verilerle yardımcı olan elit bir asistansın. Sana öğrencinin puanı, sıralaması ve gidebileceği okullar verilecek. Yanıtlarında Markdown kullan ve havalı, fütüristik bir üslup takın."}
         ]
-        response = client.chat.completions.create(model="gpt-4o", messages=mesajlar)
+        for m in gecmis:
+            mesaj_listesi.append({
+                "role": "user" if m["role"] == "user" else "assistant",
+                "content": m["content"]
+            })
+        gercek_okullar = motor.gercek_okullari_getir(veri.puan, veri.puan_turu)
+        mesaj_listesi.append({
+            "role": "user",
+            "content": f"Sorum: {veri.soru}\nPuan Türüm: {veri.puan_turu}\nPuanım: {veri.puan}\nTahmini Sıralamam: {veri.siralama}\nKazanabileceğim Bazı Okullar: {gercek_okullar}"
+        })
+
+        response = client.chat.completions.create(model="gpt-4o", messages=mesaj_listesi)
         ai_cevap = response.choices[0].message.content
-        ai_yorumu_kaydet(veri.user_id, ai_cevap)
-        return {"basarili": True, "cevap": ai_cevap}
+
+        # Supabase'e kaydet
+        user_ok = mesaj_kaydet(veri.user_id, session_id, "user", veri.soru)
+        ai_ok   = mesaj_kaydet(veri.user_id, session_id, "ai", ai_cevap)
+        try:
+            ai_yorumu_kaydet(veri.user_id, ai_cevap)
+        except Exception:
+            pass  # ai_yorum kaydı kritik değil, hata olsa da cevap dön
+
+        return {
+            "basarili": True,
+            "cevap": ai_cevap,
+            "session_id": session_id,
+            "kaydedildi": user_ok and ai_ok
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/sohbet-gecmisi/{user_id}")
+async def sohbet_gecmisi_endpoint(user_id: str, session_id: Optional[str] = None):
+    mesajlar = sohbet_gecmisi_getir(user_id, session_id)
+    return {"basarili": True, "mesajlar": mesajlar}
+
+@app.get("/sohbet-oturumlari/{user_id}")
+async def sohbet_oturumlari_endpoint(user_id: str):
+    oturumlar = sohbet_oturumlarini_getir(user_id)
+    return {"basarili": True, "oturumlar": oturumlar}
 
 # YENİ: Soru Çözme Endpoint'i
 @app.post("/soru-coz")

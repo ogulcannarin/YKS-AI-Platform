@@ -32,7 +32,8 @@ export default function SoruCoz({ session }) {
     setYukleniyor(true);
     setCevap(null);
     try {
-      const payload = { user_id: 123, image_base64: imageStr || '', soru_metni: soru };
+      const userId = session?.user?.email || '123';
+      const payload = { user_id: userId, image_base64: imageStr || '', soru_metni: soru || 'Bu soruyu adım adım açıklar mısın?' };
       const res = await fetch('http://127.0.0.1:8000/soru-coz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

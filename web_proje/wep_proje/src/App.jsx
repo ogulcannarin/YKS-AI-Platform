@@ -13,6 +13,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [currentPage, setCurrentPage] = useState('calculator');
   const [hesaplananSonuclar, setHesaplananSonuclar] = useState(null);
+  const [aiZiyaretSayisi, setAiZiyaretSayisi] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -35,11 +36,18 @@ function App() {
     );
   }
 
+  const handlePageChange = (page) => {
+    if (page === 'aidanisman') {
+      setAiZiyaretSayisi(prev => prev + 1);
+    }
+    setCurrentPage(page);
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'calculator': return <Calculator key="calculator" results={hesaplananSonuclar} setResults={setHesaplananSonuclar} />;
       case 'sorucoz':    return <SoruCoz    key="sorucoz"    session={session} />;
-      case 'aidanisman': return <AiDanisman key="aidanisman" session={session} results={hesaplananSonuclar} />;
+      case 'aidanisman': return <AiDanisman key={`aidanisman-${aiZiyaretSayisi}`} session={session} results={hesaplananSonuclar} />;
       case 'konutakip':  return <KonuTakip  key="konutakip"  session={session} />;
       case 'profile':    return <Profile    key="profile"    session={session} />;
       default:           return <Calculator key="calculator" results={hesaplananSonuclar} setResults={setHesaplananSonuclar} />;
@@ -53,7 +61,7 @@ function App() {
         {/* Desktop Sidebar */}
         <Navbar
           currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
+          setCurrentPage={handlePageChange}
           session={session}
         />
 

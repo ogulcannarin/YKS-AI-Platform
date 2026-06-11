@@ -7,11 +7,17 @@ load_dotenv()
 
 # URL ve Key bilgilerini ortam değişkenlerinden güvenli bir şekilde çekiyoruz
 url: str = os.getenv("SUPABASE_URL")
-key: str = os.getenv("SUPABASE_KEY")
+# Backend için service_role key kullan (RLS'yi atlar) — yoksa anon key'e dön
+key: str = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
 
 # Eğer .env dosyasında eksik bilgi varsa programı uyarması için küçük bir kontrol
 if not url or not key:
     raise ValueError("Supabase URL veya Key bulunamadı! Lütfen .env dosyanızı kontrol edin.")
+
+if os.getenv("SUPABASE_SERVICE_KEY"):
+    print("[OK] Supabase service_role key kullanılıyor (RLS atlanıyor)")
+else:
+    print("[UYARI] service_role key bulunamadı, anon key kullanılıyor — RLS aktifse yazma/okuma başarısız olabilir!")
 
 # Supabase istemcisini (client) oluşturuyoruz
 supabase: Client = create_client(url, key)

@@ -41,11 +41,13 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.myapplication.network.*
 import com.example.myapplication.ui.theme.MyApplicationTheme
+import okhttp3.OkHttpClient
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 class SoruCozActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,9 +76,17 @@ fun SoruCozEkrani(onGeriDon: () -> Unit) {
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> imageUri = uri }
 
+    val okHttpClient = remember {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)   // Görsel analiz uzun sürebilir
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
     val retrofit = remember {
         Retrofit.Builder()
             .baseUrl("http://10.0.2.2:8000/")
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }

@@ -39,12 +39,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import com.example.myapplication.network.*
 import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 // ─── Veri Tipleri ─────────────────────────────────────────────────────────────
 
@@ -97,9 +99,17 @@ fun YksAsistanUI(userEmail: String = "") {
         }
     }
 
+    val okHttpClient = remember {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)   // OpenAI bazen yavaş cevaplar
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
     val retrofit = remember {
         Retrofit.Builder()
             .baseUrl("http://10.0.2.2:8000/")
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
@@ -132,22 +142,28 @@ fun YksAsistanUI(userEmail: String = "") {
     var aiSoru by remember { mutableStateOf("") }
     var aiMesajlar by remember { mutableStateOf<List<Pair<String,String>>>(emptyList()) } // Pair(role, content)
     var aiYukleniyor by remember { mutableStateOf(false) }
+
     var aiSessionId by remember { mutableStateOf<String?>(null) }
     var aiOturumlar by remember { mutableStateOf<List<ChatOturum>>(emptyList()) }
     var aiOturumGoster by remember { mutableStateOf(false) }
     var aiOturumYukleniyor by remember { mutableStateOf(false) }
 
-    // Oturumları yükle (sekme açılınca)
+    // Oturumları yükle yardımcı fonksiyon
+    fun fetchAiOturumlar() {
+        aiOturumYukleniyor = true
+        apiService.sohbetOturumlariniGetir(userEmail).enqueue(object : Callback<SohbetOturumlariResponse> {
+            override fun onResponse(call: Call<SohbetOturumlariResponse>, response: Response<SohbetOturumlariResponse>) {
+                aiOturumYukleniyor = false
+                aiOturumlar = response.body()?.oturumlar ?: emptyList()
+            }
+            override fun onFailure(call: Call<SohbetOturumlariResponse>, t: Throwable) { aiOturumYukleniyor = false }
+        })
+    }
+
+    // Oturumları yükle (AI sekmesi her açılınca - isEmpty() koşulu yok, her zaman taze veri çekiliyor)
     LaunchedEffect(altSekme) {
-        if (altSekme == AltSekme.AI && aiOturumlar.isEmpty()) {
-            aiOturumYukleniyor = true
-            apiService.sohbetOturumlariniGetir(userEmail).enqueue(object : Callback<SohbetOturumlariResponse> {
-                override fun onResponse(call: Call<SohbetOturumlariResponse>, response: Response<SohbetOturumlariResponse>) {
-                    aiOturumYukleniyor = false
-                    aiOturumlar = response.body()?.oturumlar ?: emptyList()
-                }
-                override fun onFailure(call: Call<SohbetOturumlariResponse>, t: Throwable) { aiOturumYukleniyor = false }
-            })
+        if (altSekme == AltSekme.AI) {
+            fetchAiOturumlar()
         }
     }
 
@@ -471,15 +487,10 @@ fun YksAsistanUI(userEmail: String = "") {
                                                             aiYukleniyor = false
                                                             val body = response.body()
                                                             if (body != null) {
-                                                                if (aiSessionId == null) {
+                                                                if (aiSessionId == null && body.session_id != null) {
                                                                     aiSessionId = body.session_id
-                                                                    // Oturum listesini güncelle
-                                                                    apiService.sohbetOturumlariniGetir(userEmail).enqueue(object : Callback<SohbetOturumlariResponse> {
-                                                                        override fun onResponse(call: Call<SohbetOturumlariResponse>, r: Response<SohbetOturumlariResponse>) {
-                                                                            aiOturumlar = r.body()?.oturumlar ?: emptyList()
-                                                                        }
-                                                                        override fun onFailure(call: Call<SohbetOturumlariResponse>, t: Throwable) {}
-                                                                    })
+                                                                    // Yeni oturum oluştu, listeyi güncelle
+                                                                    fetchAiOturumlar()
                                                                 }
                                                                 aiMesajlar = aiMesajlar + Pair("ai", body.cevap)
                                                             }
@@ -519,14 +530,10 @@ fun YksAsistanUI(userEmail: String = "") {
                                                 aiYukleniyor = false
                                                 val body = response.body()
                                                 if (body != null) {
-                                                    if (aiSessionId == null) {
+                                                    if (aiSessionId == null && body.session_id != null) {
                                                         aiSessionId = body.session_id
-                                                        apiService.sohbetOturumlariniGetir(userEmail).enqueue(object : Callback<SohbetOturumlariResponse> {
-                                                            override fun onResponse(call: Call<SohbetOturumlariResponse>, r: Response<SohbetOturumlariResponse>) {
-                                                                aiOturumlar = r.body()?.oturumlar ?: emptyList()
-                                                            }
-                                                            override fun onFailure(call: Call<SohbetOturumlariResponse>, t: Throwable) {}
-                                                        })
+                                                        // Yeni oturum oluştu, listeyi güncelle
+                                                        fetchAiOturumlar()
                                                     }
                                                     aiMesajlar = aiMesajlar + Pair("ai", body.cevap)
                                                 }
